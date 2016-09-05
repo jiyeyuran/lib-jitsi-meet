@@ -201,7 +201,8 @@ var ScreenObtainer = {
                 function() {
                     if (firefoxExtInstalled === null)
                         firefoxExtInstalled = false;
-                    self.obtainScreenOnFirefox(callback, errorCallback);
+                    self.obtainScreenOnFirefox(options, 
+                        callback, errorCallback);
                 },
                 300
             );
