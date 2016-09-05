@@ -55,6 +55,18 @@ function JitsiLocalTrack(stream, track, mediaType, videoType, resolution,
     // enumerateDevices() list.
     this._trackEnded = false;
 
+    /**
+     * The value of bytes sent received from the statistics module.
+     */
+    this._bytesSent = null;
+
+    /**
+     * Used only for detection of audio problems. We want to check only once
+     * whether the track is sending bytes ot not. This flag is set to false
+     * after the check.
+     */
+    this._testByteSent = true;
+
     // Currently there is no way to determine with what device track was
     // created (until getConstraints() support), however we can associate tracks
     // with real devices obtained from enumerateDevices() call as soon as it's
@@ -194,7 +206,6 @@ JitsiLocalTrack.prototype._setMute = function (mute) {
         this.isAudioTrack() ||
         this.videoType === VideoType.DESKTOP ||
         RTCBrowserType.isFirefox()) {
-
         if(this.track)
             this.track.enabled = !mute;
     } else {
@@ -206,7 +217,7 @@ JitsiLocalTrack.prototype._setMute = function (mute) {
                     //FIXME: Maybe here we should set the SRC for the containers
                     // to something
                     RTCUtils.stopMediaStream(self.stream);
-                    self.stream = null;
+                    self._setStream(null);
                 });
         } else {
             // This path is only for camera.
@@ -228,7 +239,7 @@ JitsiLocalTrack.prototype._setMute = function (mute) {
                         throw new JitsiTrackError(
                             JitsiTrackErrors.TRACK_NO_STREAM_FOUND);
                     }else {
-                        self.stream = streamInfo.stream;
+                        self._setStream(streamInfo.stream);
                         self.track = streamInfo.track;
                         // This is not good when video type changes after
                         // unmute, but let's not crash here
@@ -444,6 +455,24 @@ JitsiLocalTrack.prototype.isLocal = function () {
 JitsiLocalTrack.prototype.getDeviceId = function () {
     return this._realDeviceId || this.deviceId;
 };
+
+/**
+ * Sets the value of bytes sent statistic.
+ * @param bytesSent {intiger} the new value
+ * NOTE: used only for audio tracks to detect audio issues.
+ */
+JitsiLocalTrack.prototype._setByteSent = function (bytesSent) {
+    this._bytesSent = bytesSent;
+    if(this._testByteSent) {
+        setTimeout(function () {
+            if(this._bytesSent <= 0){
+                //we are not receiving anything from the microphone
+                this.eventEmitter.emit(JitsiTrackEvents.TRACK_AUDIO_NOT_WORKING);
+            }
+        }.bind(this), 3000);
+        this._testByteSent = false;
+    }
+}
 
 /**
  * Returns facing mode for video track from camera. For other cases (e.g. audio

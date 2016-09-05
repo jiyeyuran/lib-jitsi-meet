@@ -16,6 +16,8 @@ var Settings = require("./modules/settings/Settings");
 var ComponentsVersions = require("./modules/version/ComponentsVersions");
 var GlobalOnErrorHandler = require("./modules/util/GlobalOnErrorHandler");
 var JitsiConferenceEventManager = require("./JitsiConferenceEventManager");
+var VideoType = require('./service/RTC/VideoType');
+var Transcriber = require("./modules/transcription/transcriber");
 
 /**
  * Creates a JitsiConference object with the given name and properties.
@@ -341,6 +343,29 @@ JitsiConference.prototype.setSubject = function (subject) {
 };
 
 /**
+ * Get a transcriber object for all current participants in this conference
+ * @return {Transcriber} the transcriber object
+ */
+JitsiConference.prototype.getTranscriber = function(){
+    if(this.transcriber === undefined){
+        this.transcriber = new Transcriber();
+        //add all existing local audio tracks to the transcriber
+        this.rtc.localTracks.forEach(function (localTrack) {
+            if(localTrack.isAudioTrack()){
+                this.transcriber.addTrack(localTrack);
+            }
+        }.bind(this));
+        //and all remote audio tracks
+        this.rtc.remoteTracks.forEach(function (remoteTrack){
+            if(remoteTrack.isAudioTrack()){
+                this.transcriber.addTrack(remoteTrack);
+            }
+        }.bind(this));
+    }
+    return this.transcriber;
+};
+
+/**
  * Adds JitsiLocalTrack object to the conference.
  * @param track the JitsiLocalTrack object.
  * @returns {Promise<JitsiLocalTrack>}
@@ -379,7 +404,7 @@ JitsiConference.prototype.addTrack = function (track) {
         track.ssrcHandler);
 
     if(track.isAudioTrack() || (track.isVideoTrack() &&
-        track.videoType !== "desktop")) {
+        track.videoType !== VideoType.DESKTOP)) {
         // Report active device to statistics
         var devices = RTC.getCurrentlyAvailableMediaDevices();
         device = devices.find(function (d) {
@@ -426,7 +451,7 @@ JitsiConference.prototype.addTrack = function (track) {
             // send event for starting screen sharing
             // FIXME: we assume we have only one screen sharing track
             // if we change this we need to fix this check
-            if (track.isVideoTrack() && track.videoType === "desktop")
+            if (track.isVideoTrack() && track.videoType === VideoType.DESKTOP)
                 this.statistics.sendScreenSharingEvent(true);
 
             this.eventEmitter.emit(JitsiConferenceEvents.TRACK_ADDED, track);
@@ -479,7 +504,7 @@ JitsiConference.prototype.onTrackRemoved = function (track) {
     // send event for stopping screen sharing
     // FIXME: we assume we have only one screen sharing track
     // if we change this we need to fix this check
-    if (track.isVideoTrack() && track.videoType === "desktop")
+    if (track.isVideoTrack() && track.videoType === VideoType.DESKTOP)
         this.statistics.sendScreenSharingEvent(false);
 
     this.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
@@ -719,6 +744,10 @@ JitsiConference.prototype.onTrackAdded = function (track) {
 
     // Add track to JitsiParticipant.
     participant._tracks.push(track);
+
+    if(this.transcriber){
+        this.transcriber.addTrack(track);
+    }
 
     var emitter = this.eventEmitter;
     track.addEventListener(
