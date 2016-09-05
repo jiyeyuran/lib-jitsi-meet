@@ -2,8 +2,9 @@
 var logger = require("jitsi-meet-logger").getLogger(__filename);
 var GlobalOnErrorHandler = require("../util/GlobalOnErrorHandler");
 
-var jsSHA = require('jssha');
-var io = require('socket.io-client');
+// var jsSHA = require('jssha');
+// var io = require('socket.io-client');
+var jsSHA = {}, io = {};
 
 /**
  * We define enumeration of wrtcFuncNames as we need them before
