@@ -1,11 +1,19 @@
 /* global __filename, module */
 var logger = require("jitsi-meet-logger").getLogger(__filename);
 var RTCBrowserType = require("./RTCBrowserType");
-var RTCEvents = require("../../service/RTC/RTCEvents");
 var RTCUtils = require("./RTCUtils");
-var JitsiTrackEvents = require("../../JitsiTrackEvents");
+import * as JitsiTrackEvents from "../../JitsiTrackEvents";
 var EventEmitter = require("events");
 var MediaType = require("../../service/RTC/MediaType");
+
+/**
+ * Maps our handler types to MediaStreamTrack properties.
+ */
+var trackHandler2Prop = {
+    "track_mute": "onmute",//Not supported on FF
+    "track_unmute": "onunmute",
+    "track_ended": "onended"
+};
 
 /**
  * This implements 'onended' callback normally fired by WebRTC after the stream
@@ -90,16 +98,21 @@ function JitsiTrack(conference, stream, track, streamInactiveHandler, trackMedia
  * @param {Function} handler the handler.
  */
 JitsiTrack.prototype._setHandler = function (type, handler) {
-    if(this.stream) {
-        if(type === "inactive") {
-            if (RTCBrowserType.isFirefox()) {
-                implementOnEndedHandling(this);
-            }
-            addMediaStreamInactiveHandler(this.stream, handler);
-        }
-    }
     this.handlers[type] = handler;
-}
+    if(!this.stream)
+        return;
+
+    if(type === "inactive") {
+        if (RTCBrowserType.isFirefox()) {
+            implementOnEndedHandling(this);
+        }
+        addMediaStreamInactiveHandler(this.stream, handler);
+    } else if(trackHandler2Prop.hasOwnProperty(type)) {
+        this.stream.getVideoTracks().forEach(function (track) {
+            track[trackHandler2Prop[type]] = handler;
+        }, this);
+    }
+};
 
 /**
  * Sets the stream property of JitsiTrack object and sets all stored handlers
@@ -112,7 +125,7 @@ JitsiTrack.prototype._setStream = function (stream) {
         typeof(this.handlers[type]) === "function" &&
             this._setHandler(type, this.handlers[type]);
     }, this);
-}
+};
 
 /**
  * Returns the type (audio or video) of this track.
@@ -122,17 +135,36 @@ JitsiTrack.prototype.getType = function() {
 };
 
 /**
- * Check if this is audiotrack.
+ * Check if this is an audio track.
  */
 JitsiTrack.prototype.isAudioTrack = function () {
     return this.getType() === MediaType.AUDIO;
 };
 
 /**
- * Check if this is videotrack.
+ * Checks whether the underlying WebRTC <tt>MediaStreamTrack</tt> is muted
+ * according to it's 'muted' field status.
+ * @return {boolean} <tt>true</tt> if the underlying <tt>MediaStreamTrack</tt>
+ * is muted or <tt>false</tt> otherwise.
+ */
+JitsiTrack.prototype.isWebRTCTrackMuted = function () {
+    return this.track && this.track.muted;
+};
+
+/**
+ * Check if this is a video track.
  */
 JitsiTrack.prototype.isVideoTrack = function () {
     return this.getType() === MediaType.VIDEO;
+};
+
+/**
+ * Checks whether this is a local track.
+ * @abstract
+ * @return {boolean} 'true' if it's a local track or 'false' otherwise.
+ */
+JitsiTrack.prototype.isLocal = function () {
+    throw new Error("Not implemented by subclass");
 };
 
 /**
@@ -252,6 +284,7 @@ JitsiTrack.prototype.detach = function (container) {
  *        method has been called previously on video or audio HTML element.
  * @private
  */
+// eslint-disable-next-line no-unused-vars
 JitsiTrack.prototype._attachTTFMTracker = function (container) {
 };
 
@@ -296,7 +329,7 @@ JitsiTrack.prototype.getId = function () {
 };
 
 /**
- * Checks whether the MediaStream is avtive/not ended.
+ * Checks whether the MediaStream is active/not ended.
  * When there is no check for active we don't have information and so
  * will return that stream is active (in case of FF).
  * @returns {boolean} whether MediaStream is active.

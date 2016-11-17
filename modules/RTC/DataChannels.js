@@ -1,12 +1,9 @@
-/* global config, APP, Strophe */
-
 // cache datachannels to avoid garbage collection
 // https://code.google.com/p/chromium/issues/detail?id=405545
 
 var logger = require("jitsi-meet-logger").getLogger(__filename);
 var RTCEvents = require("../../service/RTC/RTCEvents");
 var GlobalOnErrorHandler = require("../util/GlobalOnErrorHandler");
-
 
 /**
  * Binds "ondatachannel" event listener to given PeerConnection instance.
@@ -40,8 +37,7 @@ function DataChannels(peerConnection, emitter) {
      var msgData = event.data;
      logger.info("Got My Data Channel Message:", msgData, dataChannel);
      };*/
-};
-
+}
 
 /**
  * Callback triggered by PeerConnection when new data channel is opened
@@ -51,7 +47,6 @@ function DataChannels(peerConnection, emitter) {
 DataChannels.prototype.onDataChannel = function (event) {
     var dataChannel = event.channel;
     var self = this;
-    var selectedEndpoint = null;
 
     dataChannel.onopen = function () {
         logger.info("Data channel opened by the Videobridge!", dataChannel);
@@ -63,27 +58,14 @@ DataChannels.prototype.onDataChannel = function (event) {
         //dataChannel.send(new ArrayBuffer(12));
 
         self.eventEmitter.emit(RTCEvents.DATA_CHANNEL_OPEN);
-
-        // when the data channel becomes available, tell the bridge about video
-        // selections so that it can do adaptive simulcast,
-        // we want the notification to trigger even if userJid is undefined,
-        // or null.
-        // XXX why do we not do the same for pinned endpoints?
-        try {
-            self.sendSelectedEndpointMessage(self.selectedEndpoint);
-        } catch (error) {
-            GlobalOnErrorHandler.callErrorHandler(error);
-            logger.error("Cannot sendSelectedEndpointMessage ",
-                self.selectedEndpoint, ". Error: ", error);
-        }
     };
 
     dataChannel.onerror = function (error) {
-        var e = new Error("Data Channel Error:" + error);
         // FIXME: this one seems to be generated a bit too often right now
         // so we are temporarily commenting it before we have more clarity
         // on which of the errors we absolutely need to report
-        //GlobalOnErrorHandler.callErrorHandler(e);
+        //GlobalOnErrorHandler.callErrorHandler(
+        //        new Error("Data Channel Error:" + error));
         logger.error("Data Channel Error:", error, dataChannel);
     };
 
@@ -113,7 +95,8 @@ DataChannels.prototype.onDataChannel = function (event) {
                 logger.info(
                     "Data channel new dominant speaker event: ",
                     dominantSpeakerEndpoint);
-                self.eventEmitter.emit(RTCEvents.DOMINANTSPEAKER_CHANGED, dominantSpeakerEndpoint);
+                self.eventEmitter.emit(RTCEvents.DOMINANT_SPEAKER_CHANGED,
+                  dominantSpeakerEndpoint);
             }
             else if ("InLastNChangeEvent" === colibriClass) {
                 var oldValue = obj.oldValue;
@@ -157,6 +140,14 @@ DataChannels.prototype.onDataChannel = function (event) {
                     RTCEvents.ENDPOINT_MESSAGE_RECEIVED, obj.from,
                     obj.msgPayload);
             }
+            else if ("EndpointConnectivityStatusChangeEvent" === colibriClass) {
+                var endpoint = obj.endpoint;
+                var isActive = obj.active === "true";
+                logger.info("Endpoint connection status changed: " + endpoint
+                           + " active ? " + isActive);
+                self.eventEmitter.emit(RTCEvents.ENDPOINT_CONN_STATUS_CHANGED,
+                    endpoint, isActive);
+            }
             else {
                 logger.debug("Data channel JSON-formatted message: ", obj);
                 // The received message appears to be appropriately formatted
@@ -195,7 +186,6 @@ DataChannels.prototype.closeAllChannels = function () {
  * or Error with "No opened data channels found!" message.
  */
 DataChannels.prototype.sendSelectedEndpointMessage = function (endpointId) {
-    this.selectedEndpoint = endpointId;
     this._onXXXEndpointChanged("selected", endpointId);
 };
 
@@ -274,7 +264,7 @@ DataChannels.prototype.send = function (jsonObject) {
     })) {
         throw new Error("No opened data channels found!");
     }
-}
+};
 
 /**
  * Sends message via the datachannels.
@@ -291,6 +281,6 @@ DataChannels.prototype.sendDataChannelMessage = function (to, payload) {
         to: to,
         msgPayload: payload
     });
-}
+};
 
 module.exports = DataChannels;

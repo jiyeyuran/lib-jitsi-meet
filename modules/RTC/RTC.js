@@ -1,11 +1,12 @@
-/* global __filename, APP, module */
+/* global Strophe */
+
 var logger = require("jitsi-meet-logger").getLogger(__filename);
 var EventEmitter = require("events");
-var RTCBrowserType = require("./RTCBrowserType");
 var RTCEvents = require("../../service/RTC/RTCEvents.js");
 var RTCUtils = require("./RTCUtils.js");
-var JitsiTrack = require("./JitsiTrack");
 var JitsiLocalTrack = require("./JitsiLocalTrack.js");
+import JitsiTrackError from "../../JitsiTrackError";
+import * as JitsiTrackErrors from "../../JitsiTrackErrors";
 var DataChannels = require("./DataChannels");
 var JitsiRemoteTrack = require("./JitsiRemoteTrack.js");
 var MediaType = require("../../service/RTC/MediaType");
@@ -45,6 +46,11 @@ function RTC(conference, options) {
     this.eventEmitter = new EventEmitter();
     var self = this;
     this.options = options || {};
+    // A flag whether we had received that the data channel had opened
+    // we can get this flag out of sync if for some reason data channel got
+    // closed from server, a desired behaviour so we can see errors when this
+    // happen
+    this.dataChannelsOpen = false;
 
     // Switch audio output device on all remote audio tracks. Local audio tracks
     // handle this event by themselves.
@@ -79,29 +85,72 @@ function RTC(conference, options) {
 RTC.obtainAudioAndVideoPermissions = function (options) {
     return RTCUtils.obtainAudioAndVideoPermissions(options).then(
         function (tracksInfo) {
-            return createLocalTracks(tracksInfo, options);
+            var tracks = createLocalTracks(tracksInfo, options);
+            return !tracks.some(track => !track._isReceivingData())? tracks :
+                Promise.reject(new JitsiTrackError(
+                    JitsiTrackErrors.NO_DATA_FROM_SOURCE));
     });
 };
 
 RTC.prototype.onIncommingCall = function(event) {
-    if(this.options.config.openSctp)
+    if(this.options.config.openSctp) {
         this.dataChannels = new DataChannels(event.peerconnection,
             this.eventEmitter);
+        this._dataChannelOpenListener = () => {
+            // mark that dataChannel is opened
+            this.dataChannelsOpen = true;
+            // when the data channel becomes available, tell the bridge
+            // about video selections so that it can do adaptive simulcast,
+            // we want the notification to trigger even if userJid
+            // is undefined, or null.
+            // XXX why do we not do the same for pinned endpoints?
+            try {
+                this.dataChannels.sendSelectedEndpointMessage(
+                    this.selectedEndpoint);
+            } catch (error) {
+                GlobalOnErrorHandler.callErrorHandler(error);
+                logger.error("Cannot sendSelectedEndpointMessage ",
+                    this.selectedEndpoint, ". Error: ", error);
+            }
+
+            this.removeListener(RTCEvents.DATA_CHANNEL_OPEN,
+                this._dataChannelOpenListener);
+            this._dataChannelOpenListener = null;
+        };
+        this.addListener(RTCEvents.DATA_CHANNEL_OPEN,
+            this._dataChannelOpenListener);
+    }
 };
 
 /**
- * Elects the participant with the given id to be the pinned participant in
+ * Should be called when current media session ends and after the PeerConnection
+ * has been closed using PeerConnection.close() method.
+ */
+RTC.prototype.onCallEnded = function() {
+    if (this.dataChannels) {
+        // DataChannels are not explicitly closed as the PeerConnection
+        // is closed on call ended which triggers data channel onclose events.
+        // The reference is cleared to disable any logic related to the data
+        // channels.
+        this.dataChannels = null;
+        this.dataChannelsOpen = false;
+    }
+};
+
+/**
+ * Elects the participant with the given id to be the selected participant in
  * order to always receive video for this participant (even when last n is
  * enabled).
+ * If there is no data channel we store it and send it through the channel once
+ * it is created.
  * @param id {string} the user id.
  * @throws NetworkError or InvalidStateError or Error if the operation fails.
 */
 RTC.prototype.selectEndpoint = function (id) {
-    if(this.dataChannels) {
+    // cache the value if channel is missing, till we open it
+    this.selectedEndpoint = id;
+    if(this.dataChannels && this.dataChannelsOpen)
         this.dataChannels.sendSelectedEndpointMessage(id);
-    } else {
-        throw new Error("Data channels support is disabled!");
-    }
 };
 
 /**
@@ -115,6 +164,8 @@ RTC.prototype.pinEndpoint = function (id) {
     if(this.dataChannels) {
         this.dataChannels.sendPinnedEndpointMessage(id);
     } else {
+        // FIXME: cache value while there is no data channel created
+        // and send the cached state once channel is created
         throw new Error("Data channels support is disabled!");
     }
 };
@@ -132,7 +183,7 @@ RTC.addListener = function (eventType, listener) {
 };
 
 RTC.removeListener = function (eventType, listener) {
-    RTCUtils.removeListener(eventType, listener)
+    RTCUtils.removeListener(eventType, listener);
 };
 
 RTC.isRTCReady = function () {
@@ -249,7 +300,7 @@ RTC.prototype.removeLocalTrack = function (track) {
 RTC.prototype.createRemoteTrack = function (event) {
     var ownerJid = event.owner;
     var remoteTrack = new JitsiRemoteTrack(
-        this.conference,  ownerJid, event.stream,    event.track,
+        this, this.conference, ownerJid, event.stream, event.track,
         event.mediaType, event.videoType, event.ssrc, event.muted);
     var resource = Strophe.getResourceFromJid(ownerJid);
     var remoteTracks
@@ -415,8 +466,10 @@ RTC.isDesktopSharingEnabled = function () {
  * Closes all currently opened data channels.
  */
 RTC.prototype.closeAllDataChannels = function () {
-    if(this.dataChannels)
+    if(this.dataChannels) {
         this.dataChannels.closeAllChannels();
+        this.dataChannelsOpen = false;
+    }
 };
 
 RTC.prototype.dispose = function() {
@@ -494,7 +547,7 @@ RTC.prototype.handleRemoteTrackMute = function (type, isMuted, from) {
     if (track) {
         track.setMute(isMuted);
     }
-}
+};
 
 /**
  * Handles remote track video type events
@@ -506,14 +559,15 @@ RTC.prototype.handleRemoteTrackVideoTypeChanged = function (value, from) {
     if (videoTrack) {
         videoTrack._setVideoType(value);
     }
-}
+};
 
 /**
  * Sends message via the datachannels.
  * @param to {string} the id of the endpoint that should receive the message.
  * If "" the message will be sent to all participants.
  * @param payload {object} the payload of the message.
- * @throws NetworkError or InvalidStateError or Error if the operation fails.
+ * @throws NetworkError or InvalidStateError or Error if the operation fails
+ * or there is no data channel created
  */
 RTC.prototype.sendDataChannelMessage = function (to, payload) {
     if(this.dataChannels) {
@@ -521,6 +575,6 @@ RTC.prototype.sendDataChannelMessage = function (to, payload) {
     } else {
         throw new Error("Data channels support is disabled!");
     }
-}
+};
 
 module.exports = RTC;

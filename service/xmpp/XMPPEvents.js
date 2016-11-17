@@ -11,6 +11,11 @@ var XMPPEvents = {
     // Designates an event indicating that an offer (e.g. Jingle
     // session-initiate) was received.
     CALL_INCOMING: "xmpp.callincoming.jingle",
+    // Triggered when Jicofo kills our media session, this can happen while
+    // we're still in the MUC, when it decides to terminate the media session.
+    // For example when the session is idle for too long, because we're the only
+    // person in the conference room.
+    CALL_ENDED: "xmpp.callended.jingle",
     CHAT_ERROR_RECEIVED: "xmpp.chat_error_received",
     CONFERENCE_SETUP_FAILED: "xmpp.conference_setup_failed",
     // Designates an event indicating that the connection to the XMPP server
@@ -38,7 +43,6 @@ var XMPPEvents = {
     // Designates an event indicating that the display name of a participant
     // has changed.
     DISPLAY_NAME_CHANGED: "xmpp.display_name_changed",
-    DISPOSE_CONFERENCE: "xmpp.dispose_conference",
     ETHERPAD: "xmpp.etherpad",
     FOCUS_DISCONNECTED: 'xmpp.focus_disconnected',
     FOCUS_LEFT: "xmpp.focus_left",
@@ -76,6 +80,8 @@ var XMPPEvents = {
     MUC_MEMBER_JOINED: "xmpp.muc_member_joined",
     // Designates an event indicating that a participant left the XMPP MUC.
     MUC_MEMBER_LEFT: "xmpp.muc_member_left",
+    // Designates an event indicating that local participant left the muc
+    MUC_LEFT: "xmpp.muc_left",
     // Designates an event indicating that the MUC role of a participant has
     // changed.
     MUC_ROLE_CHANGED: "xmpp.muc_role_changed",
@@ -130,6 +136,7 @@ var XMPPEvents = {
     REMOTE_TRACK_REMOVED: "xmpp.remote_track_removed",
     RESERVATION_ERROR: "xmpp.room_reservation_error",
     ROOM_CONNECT_ERROR: 'xmpp.room_connect_error',
+    ROOM_CONNECT_NOT_ALLOWED_ERROR: 'xmpp.room_connect_error.not_allowed',
     ROOM_JOIN_ERROR: 'xmpp.room_join_error',
     /**
      * Indicates that max users limit has been reached.
@@ -171,11 +178,16 @@ var XMPPEvents = {
     // Designates an event indicating that the subject of the XMPP MUC has
     // changed.
     SUBJECT_CHANGED: "xmpp.subject_changed",
+    // suspending detected
+    SUSPEND_DETECTED: "xmpp.suspend_detected",
     // Designates an event indicating that the local ICE username fragment of
     // the jingle session has changed.
     LOCAL_UFRAG_CHANGED: "xmpp.local_ufrag_changed",
     // Designates an event indicating that the local ICE username fragment of
     // the jingle session has changed.
-    REMOTE_UFRAG_CHANGED: "xmpp.remote_ufrag_changed"
+    REMOTE_UFRAG_CHANGED: "xmpp.remote_ufrag_changed",
+    // Designates an event indicating that the local ICE connection state has
+    // changed.
+    ICE_CONNECTION_STATE_CHANGED: "xmpp.ice_connection_state_changed"
 };
 module.exports = XMPPEvents;

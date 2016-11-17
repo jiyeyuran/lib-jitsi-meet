@@ -1,13 +1,13 @@
 /* global require */
-var LocalStats = require("./LocalStatsCollector.js");
-var logger = require("jitsi-meet-logger").getLogger(__filename);
-var RTPStats = require("./RTPStatsCollector.js");
-var EventEmitter = require("events");
-var StatisticsEvents = require("../../service/statistics/Events");
 var AnalyticsAdapter = require("./AnalyticsAdapter");
 var CallStats = require("./CallStats");
+var EventEmitter = require("events");
+import JitsiTrackError from "../../JitsiTrackError";
+var logger = require("jitsi-meet-logger").getLogger(__filename);
+var LocalStats = require("./LocalStatsCollector.js");
+var RTPStats = require("./RTPStatsCollector.js");
 var ScriptUtil = require('../util/ScriptUtil');
-var JitsiTrackError = require("../../JitsiTrackError");
+import * as StatisticsEvents from "../../service/statistics/Events";
 
 /**
  * True if callstats API is loaded
@@ -21,10 +21,11 @@ var JitsiTrackError = require("../../JitsiTrackError");
 // allow it to prevent people from joining a conference) to (1) start
 // downloading their API as soon as possible and (2) do the downloading
 // asynchronously.
-function loadCallStatsAPI() {
+function loadCallStatsAPI(customScriptUrl) {
     if(!isCallstatsLoaded) {
         ScriptUtil.loadScript(
-                'https://api.callstats.io/static/callstats.min.js',
+                customScriptUrl ? customScriptUrl :
+                    'https://api.callstats.io/static/callstats-ws.min.js',
                 /* async */ true,
                 /* prepend */ true);
         isCallstatsLoaded = true;
@@ -56,11 +57,6 @@ function loadAnalytics(customScriptUrl) {
             Statistics.analytics.dispose();
         });
 }
-
-/**
- * Log stats via the focus once every this many milliseconds.
- */
-var LOG_INTERVAL = 60000;
 
 /**
  * callstats strips any additional fields from Error except for "name", "stack",
@@ -122,13 +118,11 @@ function Statistics(xmpp, options) {
             // requests to any third parties.
             && (Statistics.disableThirdPartyRequests !== true);
     if(this.callStatsIntegrationEnabled)
-        loadCallStatsAPI();
+        loadCallStatsAPI(this.options.callStatsCustomScriptUrl);
     this.callStats = null;
-
-    /**
-     * Send the stats already saved in rtpStats to be logged via the focus.
-     */
-    this.logStatsIntervalId = null;
+    // Flag indicates whether or not the CallStats have been started for this
+    // Statistics instance
+    this.callStatsStarted = false;
 }
 Statistics.audioLevelsEnabled = false;
 Statistics.audioLevelsInterval = 200;
@@ -152,14 +146,6 @@ Statistics.prototype.startRemoteStats = function (peerconnection) {
     } catch (e) {
         this.rtpStats = null;
         logger.error('Failed to start collecting remote statistics: ' + e);
-    }
-    if (this.rtpStats) {
-        this.logStatsIntervalId = setInterval(function () {
-            var stats = this.rtpStats.getCollectedStats();
-            if (this.xmpp.sendLogs(stats)) {
-                this.rtpStats.clearCollectedStats();
-            }
-        }.bind(this), LOG_INTERVAL);
     }
 };
 
@@ -186,14 +172,6 @@ Statistics.prototype.removeAudioLevelListener = function(listener) {
     this.eventEmitter.removeListener(StatisticsEvents.AUDIO_LEVEL, listener);
 };
 
-/**
- * Adds listener for detected audio problems.
- * @param listener the listener.
- */
-Statistics.prototype.addAudioProblemListener = function (listener) {
-    this.eventEmitter.on(StatisticsEvents.AUDIO_NOT_WORKING, listener);
-};
-
 Statistics.prototype.addConnectionStatsListener = function (listener) {
     this.eventEmitter.on(StatisticsEvents.CONNECTION_STATS, listener);
 };
@@ -212,6 +190,7 @@ Statistics.prototype.removeByteSentStatsListener = function (listener) {
 };
 
 Statistics.prototype.dispose = function () {
+    this.stopCallStats();
     this.stopRemoteStats();
     if(this.eventEmitter)
         this.eventEmitter.removeAllListeners();
@@ -236,11 +215,6 @@ Statistics.prototype.stopRemoteStats = function () {
 
     this.rtpStats.stop();
     this.rtpStats = null;
-
-    if (this.logStatsIntervalId) {
-        clearInterval(this.logStatsIntervalId);
-        this.logStatsIntervalId = null;
-    }
 };
 
 //CALSTATS METHODS
@@ -252,9 +226,12 @@ Statistics.prototype.stopRemoteStats = function () {
  * /modules/settings/Settings.js
  */
 Statistics.prototype.startCallStats = function (session, settings) {
-    if(this.callStatsIntegrationEnabled && !this.callstats) {
+    if(this.callStatsIntegrationEnabled && !this.callStatsStarted) {
+        // Here we overwrite the previous instance, but it must be bound to
+        // the new PeerConnection
         this.callstats = new CallStats(session, settings, this.options);
         Statistics.callsStatsInstances.push(this.callstats);
+        this.callStatsStarted = true;
     }
 };
 
@@ -262,7 +239,7 @@ Statistics.prototype.startCallStats = function (session, settings) {
  * Removes the callstats.io instances.
  */
 Statistics.prototype.stopCallStats = function () {
-    if(this.callstats) {
+    if(this.callStatsStarted) {
         var index = Statistics.callsStatsInstances.indexOf(this.callstats);
         if(index > -1)
             Statistics.callsStatsInstances.splice(index, 1);
@@ -270,6 +247,7 @@ Statistics.prototype.stopCallStats = function () {
         // feedback even after the conference has been destroyed.
         // this.callstats = null;
         CallStats.dispose();
+        this.callStatsStarted = false;
     }
 };
 
@@ -285,12 +263,13 @@ Statistics.prototype.isCallstatsEnabled = function () {
 };
 
 /**
- * Notifies CallStats for ice connection failed
+ * Notifies CallStats and analytics(if present) for ice connection failed
  * @param {RTCPeerConnection} pc connection on which failure occured.
  */
 Statistics.prototype.sendIceConnectionFailedEvent = function (pc) {
     if(this.callstats)
         this.callstats.sendIceConnectionFailedEvent(pc, this.callstats);
+    Statistics.analytics.sendEvent('connection.ice_failed');
 };
 
 /**
@@ -436,16 +415,6 @@ Statistics.prototype.sendAddIceCandidateFailed = function (e, pc) {
 };
 
 /**
- * Notifies CallStats that audio problems are detected.
- *
- * @param {Error} e error to send
- */
-Statistics.prototype.sendDetectedAudioProblem = function (e) {
-    if(this.callstats)
-        this.callstats.sendDetectedAudioProblem(e);
-};
-
-/**
  * Adds to CallStats an application log.
  *
  * @param {String} a log message to send or an {Error} object to be reported
@@ -469,6 +438,8 @@ Statistics.sendLog = function (m) {
 Statistics.prototype.sendFeedback = function(overall, detailed) {
     if(this.callstats)
         this.callstats.sendFeedback(overall, detailed);
+    Statistics.analytics.sendEvent("feedback.rating",
+        {value: overall, detailed: detailed});
 };
 
 Statistics.LOCAL_JID = require("../../service/statistics/constants").LOCAL_JID;
@@ -488,12 +459,12 @@ Statistics.reportGlobalError = function (error) {
 
 /**
  * Sends event to analytics and callstats.
- * @param eventName {string} the event name.
- * @param msg {String} optional event info/messages.
+ * @param {string} eventName the event name.
+ * @param {Object} data the data to be sent.
  */
-Statistics.sendEventToAll = function (eventName, msg) {
-    this.analytics.sendEvent(eventName, null, msg);
-    Statistics.sendLog({name: eventName, msg: msg ? msg : ""});
+Statistics.sendEventToAll = function (eventName, data) {
+    this.analytics.sendEvent(eventName, data);
+    Statistics.sendLog(JSON.stringify({name: eventName, data}));
 };
 
 module.exports = Statistics;

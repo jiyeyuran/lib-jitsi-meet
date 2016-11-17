@@ -1,24 +1,36 @@
-/* global config, require, attachMediaStream, getUserMedia,
-   RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, MediaStreamTrack,
-   mozRTCPeerConnection, mozRTCSessionDescription, mozRTCIceCandidate,
-   webkitRTCPeerConnection, webkitMediaStream, webkitURL
+/* global $,
+          attachMediaStream,
+          MediaStreamTrack,
+          RTCIceCandidate,
+          RTCPeerConnection,
+          RTCSessionDescription,
+          mozRTCIceCandidate,
+          mozRTCPeerConnection,
+          mozRTCSessionDescription,
+          webkitMediaStream,
+          webkitRTCPeerConnection,
+          webkitURL
 */
-/* jshint -W101 */
 
 var logger = require("jitsi-meet-logger").getLogger(__filename);
 var RTCBrowserType = require("./RTCBrowserType");
 var Resolutions = require("../../service/RTC/Resolutions");
 var RTCEvents = require("../../service/RTC/RTCEvents");
-var AdapterJS = require("./adapter.screenshare");
 var SDPUtil = require("../xmpp/SDPUtil");
 var EventEmitter = require("events");
 var screenObtainer = require("./ScreenObtainer");
-var JitsiTrackErrors = require("../../JitsiTrackErrors");
-var JitsiTrackError = require("../../JitsiTrackError");
+import JitsiTrackError from "../../JitsiTrackError";
 var MediaType = require("../../service/RTC/MediaType");
 var VideoType = require("../../service/RTC/VideoType");
 var CameraFacingMode = require("../../service/RTC/CameraFacingMode");
 var GlobalOnErrorHandler = require("../util/GlobalOnErrorHandler");
+
+// XXX Don't require Temasys unless it's to be used because it doesn't run on
+// React Native, for example.
+const AdapterJS
+    = RTCBrowserType.isTemasysPluginUsed()
+        ? require("./adapter.screenshare")
+        : undefined;
 
 var eventEmitter = new EventEmitter();
 
@@ -32,6 +44,8 @@ var devices = {
 // Currently audio output device change is supported only in Chrome and
 // default output always has 'default' device ID
 var audioOutputDeviceId = 'default'; // default device
+// whether user has explicitly set a device to use
+var audioOutputChanged = false;
 // Disables Acoustic Echo Cancellation
 var disableAEC = false;
 // Disables Noise Suppression
@@ -164,7 +178,17 @@ function getConstraints(um, options) {
             });
         }
 
-        constraints.video.optional.push({ googLeakyBucket: true });
+        if (options.minFps || options.maxFps || options.fps) {
+            // for some cameras it might be necessary to request 30fps
+            // so they choose 30fps mjpg over 10fps yuy2
+            if (options.minFps || options.fps) {
+                options.minFps = options.minFps || options.fps; //Fall back to options.fps for backwards compatibility
+                constraints.video.mandatory.minFrameRate = options.minFps;
+            }
+            if (options.maxFps) {
+                constraints.video.mandatory.maxFrameRate = options.maxFps;
+            }
+        }
 
         setResolutionConstraints(constraints, options.resolution);
     }
@@ -214,7 +238,6 @@ function getConstraints(um, options) {
             constraints.video = {
                 mandatory: {
                     chromeMediaSource: "screen",
-                    googLeakyBucket: true,
                     maxWidth: window.screen.width,
                     maxHeight: window.screen.height,
                     maxFrameRate: 3
@@ -248,7 +271,6 @@ function getConstraints(um, options) {
             mandatory: {
                 chromeMediaSource: "desktop",
                 chromeMediaSourceId: options.desktopStream,
-                googLeakyBucket: true,
                 maxWidth: window.screen.width,
                 maxHeight: window.screen.height,
                 maxFrameRate: 3
@@ -263,22 +285,6 @@ function getConstraints(um, options) {
             constraints.video = {mandatory: {}, optional: []};
         }
         constraints.video.optional.push({bandwidth: options.bandwidth});
-    }
-
-    if(options.minFps || options.maxFps || options.fps) {
-        // for some cameras it might be necessary to request 30fps
-        // so they choose 30fps mjpg over 10fps yuy2
-        if (!constraints.video) {
-            // same behaviour as true;
-            constraints.video = {mandatory: {}, optional: []};
-        }
-        if(options.minFps || options.fps) {
-            options.minFps = options.minFps || options.fps; //Fall back to options.fps for backwards compatibility
-            constraints.video.mandatory.minFrameRate = options.minFps;
-        }
-        if(options.maxFps) {
-            constraints.video.mandatory.maxFrameRate = options.maxFps;
-        }
     }
 
     // we turn audio for both audio and video tracks, the fake audio & video seems to work
@@ -584,6 +590,7 @@ function handleLocalStream(streams, resolution) {
         if (audioVideo) {
             var audioTracks = audioVideo.getAudioTracks();
             if (audioTracks.length) {
+                // eslint-disable-next-line new-cap
                 audioStream = new webkitMediaStream();
                 for (var i = 0; i < audioTracks.length; i++) {
                     audioStream.addTrack(audioTracks[i]);
@@ -592,6 +599,7 @@ function handleLocalStream(streams, resolution) {
 
             var videoTracks = audioVideo.getVideoTracks();
             if (videoTracks.length) {
+                // eslint-disable-next-line new-cap
                 videoStream = new webkitMediaStream();
                 for (var j = 0; j < videoTracks.length; j++) {
                     videoStream.addTrack(videoTracks[j]);
@@ -650,7 +658,9 @@ function wrapAttachMediaStream(origAttachMediaStream) {
         if (stream
                 && RTCUtils.isDeviceChangeAvailable('output')
                 && stream.getAudioTracks
-                && stream.getAudioTracks().length) {
+                && stream.getAudioTracks().length
+                // we skip setting audio output if there was no explicit change
+                && audioOutputChanged) {
             element.setSinkId(RTCUtils.getAudioOutputDevice())
                 .catch(function (ex) {
                     var err = new JitsiTrackError(ex, null, ['audiooutput']);
@@ -666,7 +676,7 @@ function wrapAttachMediaStream(origAttachMediaStream) {
         }
 
         return res;
-    }
+    };
 }
 
 /**
@@ -773,8 +783,8 @@ var RTCUtils = {
                     }
                     return SDPUtil.filter_special_chars(id);
                 };
-                RTCSessionDescription = mozRTCSessionDescription;
-                RTCIceCandidate = mozRTCIceCandidate;
+                RTCSessionDescription = mozRTCSessionDescription; // eslint-disable-line
+                RTCIceCandidate = mozRTCIceCandidate;             // eslint-disable-line
             } else if (RTCBrowserType.isChrome() ||
                     RTCBrowserType.isOpera() ||
                     RTCBrowserType.isNWJS() ||
@@ -810,17 +820,19 @@ var RTCUtils = {
                             ? id
                             : SDPUtil.filter_special_chars(id));
                 };
-                // DTLS should now be enabled by default but..
-                this.pc_constraints = {'optional': [
-                    {'DtlsSrtpKeyAgreement': 'true'}
-                ]};
+
+                this.pc_constraints = {optional: [] };
+
+                // Allows sending of video to be suspended if the bandwidth
+                // estimation is too low.
+                this.pc_constraints.optional.push(
+                    {googSuspendBelowMinBitrate: true});
+
                 if (options.useIPv6) {
                     // https://code.google.com/p/webrtc/issues/detail?id=2828
                     this.pc_constraints.optional.push({googIPv6: true});
                 }
-                if (RTCBrowserType.isAndroid()) {
-                    this.pc_constraints = {}; // disable DTLS on Android
-                }
+
                 if (!webkitMediaStream.prototype.getVideoTracks) {
                     webkitMediaStream.prototype.getVideoTracks = function () {
                         return this.videoTracks;
@@ -838,7 +850,7 @@ var RTCUtils = {
                 //AdapterJS.WebRTCPlugin.setLogLevel(
                 //    AdapterJS.WebRTCPlugin.PLUGIN_LOG_LEVELS.VERBOSE);
                 var self = this;
-                AdapterJS.webRTCReady(function (isPlugin) {
+                AdapterJS.webRTCReady(function () {
 
                     self.peerconnection = RTCPeerConnection;
                     self.getUserMedia = window.getUserMedia;
@@ -871,22 +883,20 @@ var RTCUtils = {
                         return SDPUtil.filter_special_chars(stream.label);
                     };
 
-                    onReady(options, self.getUserMediaWithConstraints);
+                    onReady(options,
+                        self.getUserMediaWithConstraints.bind(self));
                     resolve();
                 });
             } else {
                 var errmsg = 'Browser does not appear to be WebRTC-capable';
-                try {
-                    logger.error(errmsg);
-                } catch (e) {
-                }
+                logger.error(errmsg);
                 reject(new Error(errmsg));
                 return;
             }
 
             // Call onReady() if Temasys plugin is not used
             if (!RTCBrowserType.isTemasysPluginUsed()) {
-                onReady(options, this.getUserMediaWithConstraints);
+                onReady(options, this.getUserMediaWithConstraints.bind(this));
                 resolve();
             }
         }.bind(this));
@@ -905,7 +915,6 @@ var RTCUtils = {
     **/
     getUserMediaWithConstraints: function ( um, success_callback, failure_callback, options) {
         options = options || {};
-        var resolution = options.resolution;
         var constraints = getConstraints(um, options);
 
         logger.info("Get media constraints", constraints);
@@ -1046,7 +1055,7 @@ var RTCUtils = {
                                 // set to not ask for permissions)
                                 self.getUserMediaWithConstraints(
                                     devices,
-                                    function (stream) {
+                                    function () {
                                         // we already failed to obtain this
                                         // media, so we are not supposed in any
                                         // way to receive success for this call
@@ -1228,6 +1237,7 @@ var RTCUtils = {
         return featureDetectionAudioEl.setSinkId(deviceId)
             .then(function() {
                 audioOutputDeviceId = deviceId;
+                audioOutputChanged = true;
 
                 logger.log('Audio output device set to ' + deviceId);
 

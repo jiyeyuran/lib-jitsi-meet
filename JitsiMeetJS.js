@@ -2,14 +2,15 @@ var logger = require("jitsi-meet-logger").getLogger(__filename);
 var AuthUtil = require("./modules/util/AuthUtil");
 var JitsiConnection = require("./JitsiConnection");
 var JitsiMediaDevices = require("./JitsiMediaDevices");
-var JitsiConferenceEvents = require("./JitsiConferenceEvents");
-var JitsiConnectionEvents = require("./JitsiConnectionEvents");
-var JitsiMediaDevicesEvents = require('./JitsiMediaDevicesEvents');
-var JitsiConnectionErrors = require("./JitsiConnectionErrors");
-var JitsiConferenceErrors = require("./JitsiConferenceErrors");
-var JitsiTrackEvents = require("./JitsiTrackEvents");
-var JitsiTrackErrors = require("./JitsiTrackErrors");
-var JitsiTrackError = require("./JitsiTrackError");
+import * as JitsiConferenceErrors from "./JitsiConferenceErrors";
+import * as JitsiConferenceEvents from "./JitsiConferenceEvents";
+import * as JitsiConnectionErrors from "./JitsiConnectionErrors";
+import * as JitsiConnectionEvents from "./JitsiConnectionEvents";
+import * as JitsiMediaDevicesEvents from "./JitsiMediaDevicesEvents";
+import * as ConnectionQualityEvents from "./service/connectivity/ConnectionQualityEvents";
+import JitsiTrackError from "./JitsiTrackError";
+import * as JitsiTrackErrors from "./JitsiTrackErrors";
+import * as JitsiTrackEvents from "./JitsiTrackEvents";
 var JitsiRecorderErrors = require("./JitsiRecorderErrors");
 var Logger = require("jitsi-meet-logger");
 var MediaType = require("./service/RTC/MediaType");
@@ -31,7 +32,7 @@ function getLowerResolution(resolution) {
     var order = Resolutions[resolution].order;
     var res = null;
     var resName = null;
-    for(var i in Resolutions) {
+    for(let i in Resolutions) {
         var tmp = Resolutions[i];
         if (!res || (res.order < tmp.order && tmp.order < order)) {
             resName = i;
@@ -76,7 +77,8 @@ var LibJitsiMeet = {
         conference: JitsiConferenceEvents,
         connection: JitsiConnectionEvents,
         track: JitsiTrackEvents,
-        mediaDevices: JitsiMediaDevicesEvents
+        mediaDevices: JitsiMediaDevicesEvents,
+        connectionQuality: ConnectionQualityEvents
     },
     errors: {
         conference: JitsiConferenceErrors,
@@ -91,7 +93,7 @@ var LibJitsiMeet = {
     mediaDevices: JitsiMediaDevices,
     analytics: null,
     init: function (options) {
-        var logObject, attr;
+        let logObject, attr;
         Statistics.init(options);
         this.analytics = Statistics.analytics;
 
@@ -119,7 +121,7 @@ var LibJitsiMeet = {
                 id: "component_version",
                 component: "lib-jitsi-meet",
                 version: this.version
-            }
+            };
             Statistics.sendLog(JSON.stringify(logObject));
         }
 
@@ -200,11 +202,11 @@ var LibJitsiMeet = {
                     window.performance.now();
 
                 Statistics.analytics.sendEvent(addDeviceTypeToAnalyticsEvent(
-                    "getUserMedia.success", options), options);
+                    "getUserMedia.success", options), {value: options});
 
                 if(!RTC.options.disableAudioLevels)
-                    for(var i = 0; i < tracks.length; i++) {
-                        var track = tracks[i];
+                    for(let i = 0; i < tracks.length; i++) {
+                        const track = tracks[i];
                         var mStream = track.getOriginalStream();
                         if(track.getType() === MediaType.AUDIO){
                             Statistics.startLocalStats(mStream,
@@ -216,6 +218,17 @@ var LibJitsiMeet = {
                                 });
                         }
                     }
+
+                // set real device ids
+                var currentlyAvailableMediaDevices
+                    = RTC.getCurrentlyAvailableMediaDevices();
+                if (currentlyAvailableMediaDevices) {
+                    for(let i = 0; i < tracks.length; i++) {
+                        const track = tracks[i];
+                        track._setRealDeviceIdFromDeviceList(
+                            currentlyAvailableMediaDevices);
+                    }
+                }
 
                 return tracks;
             }).catch(function (error) {
@@ -243,7 +256,7 @@ var LibJitsiMeet = {
                     // User cancelled action is not really an error, so only
                     // log it as an event to avoid having conference classified
                     // as partially failed
-                    var logObject = {
+                    const logObject = {
                         id: "chrome_extension_user_canceled",
                         message: error.message
                     };
@@ -252,7 +265,7 @@ var LibJitsiMeet = {
                         "getUserMedia.userCancel.extensionInstall");
                 } else if (JitsiTrackErrors.NOT_FOUND === error.name) {
                     // logs not found devices with just application log to cs
-                    var logObject = {
+                    const logObject = {
                         id: "usermedia_missing_device",
                         status: error.gum.devices
                     };
@@ -266,7 +279,7 @@ var LibJitsiMeet = {
                     Statistics.analytics.sendEvent(
                         addDeviceTypeToAnalyticsEvent(
                             "getUserMedia.failed", options) + '.' + error.name,
-                        options);
+                        {value: options});
                 }
 
                 window.connectionTimes["obtainPermissions.end"] =
@@ -336,8 +349,5 @@ var LibJitsiMeet = {
         AuthUtil: AuthUtil
     }
 };
-
-//Setups the promise object.
-window.Promise = window.Promise || require("es6-promise").Promise;
 
 module.exports = LibJitsiMeet;

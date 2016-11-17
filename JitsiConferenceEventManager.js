@@ -3,8 +3,8 @@ var logger = require("jitsi-meet-logger").getLogger(__filename);
 var EventEmitterForwarder = require("./modules/util/EventEmitterForwarder");
 var XMPPEvents = require("./service/xmpp/XMPPEvents");
 var RTCEvents = require("./service/RTC/RTCEvents");
-var JitsiConferenceEvents = require("./JitsiConferenceEvents");
-var JitsiConferenceErrors = require("./JitsiConferenceErrors");
+import * as JitsiConferenceErrors from "./JitsiConferenceErrors";
+import * as JitsiConferenceEvents from "./JitsiConferenceEvents";
 var AuthenticationEvents =
     require("./service/authentication/AuthenticationEvents");
 var Statistics = require("./modules/statistics/statistics");
@@ -99,17 +99,22 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
         JitsiConferenceEvents.CONFERENCE_JOINED);
     // send some analytics events
     chatRoom.addListener(XMPPEvents.MUC_JOINED,
-        function ()
-        {
-            for (var ckey in chatRoom.connectionTimes){
-                var cvalue = chatRoom.connectionTimes[ckey];
-                Statistics.analytics.sendEvent('conference.' + ckey, cvalue);
+        () => {
+            let key, value;
+
+            this.conference.connectionIsInterrupted = false;
+
+            for (key in chatRoom.connectionTimes){
+                value = chatRoom.connectionTimes[key];
+                Statistics.analytics.sendEvent('conference.' + key,
+                    {value: value});
             }
-            for (var xkey in chatRoom.xmpp.connectionTimes){
-                var xvalue = chatRoom.xmpp.connectionTimes[xkey];
-                Statistics.analytics.sendEvent('xmpp.' + xkey, xvalue);
+            for (key in chatRoom.xmpp.connectionTimes){
+                value = chatRoom.xmpp.connectionTimes[key];
+                Statistics.analytics.sendEvent('xmpp.' + key,
+                    {value: value});
             }
-        });
+    });
 
     this.chatRoomForwarder.forward(XMPPEvents.ROOM_JOIN_ERROR,
         JitsiConferenceEvents.CONFERENCE_FAILED,
@@ -118,6 +123,9 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
     this.chatRoomForwarder.forward(XMPPEvents.ROOM_CONNECT_ERROR,
         JitsiConferenceEvents.CONFERENCE_FAILED,
         JitsiConferenceErrors.CONNECTION_ERROR);
+    this.chatRoomForwarder.forward(XMPPEvents.ROOM_CONNECT_NOT_ALLOWED_ERROR,
+        JitsiConferenceEvents.CONFERENCE_FAILED,
+        JitsiConferenceErrors.NOT_ALLOWED_ERROR);
 
     this.chatRoomForwarder.forward(XMPPEvents.ROOM_MAX_USERS_ERROR,
         JitsiConferenceEvents.CONFERENCE_FAILED,
@@ -155,7 +163,7 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
         });
 
     chatRoom.addListener(XMPPEvents.CONNECTION_ICE_FAILED,
-        function (pc) {
+        function () {
             chatRoom.eventEmitter.emit(
                 XMPPEvents.CONFERENCE_SETUP_FAILED,
                 new Error("ICE fail"));
@@ -190,8 +198,9 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
     this.chatRoomForwarder.forward(XMPPEvents.CONNECTION_INTERRUPTED,
         JitsiConferenceEvents.CONNECTION_INTERRUPTED);
     chatRoom.addListener(XMPPEvents.CONNECTION_INTERRUPTED,
-        function () {
-            Statistics.analytics.sendEvent('connection.interrupted');
+        () => {
+            Statistics.sendEventToAll('connection.interrupted');
+            this.conference.connectionIsInterrupted = true;
         });
 
     this.chatRoomForwarder.forward(XMPPEvents.RECORDER_STATE_CHANGED,
@@ -202,6 +211,11 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
 
     this.chatRoomForwarder.forward(XMPPEvents.CONNECTION_RESTORED,
         JitsiConferenceEvents.CONNECTION_RESTORED);
+    chatRoom.addListener(XMPPEvents.CONNECTION_RESTORED,
+        () => {
+            Statistics.sendEventToAll('connection.restored');
+            this.conference.connectionIsInterrupted = false;
+        });
 
     this.chatRoomForwarder.forward(XMPPEvents.CONFERENCE_SETUP_FAILED,
         JitsiConferenceEvents.CONFERENCE_FAILED,
@@ -223,8 +237,10 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
     chatRoom.addListener(XMPPEvents.KICKED,
         function () {
             conference.room = null;
-            conference.leave.bind(conference);
+            conference.leave();
         });
+    chatRoom.addListener(XMPPEvents.SUSPEND_DETECTED,
+        conference.onSuspendDetected.bind(conference));
 
     this.chatRoomForwarder.forward(XMPPEvents.MUC_LOCK_CHANGED,
         JitsiConferenceEvents.LOCK_STATE_CHANGED);
@@ -233,6 +249,8 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
         conference.onMemberJoined.bind(conference));
     chatRoom.addListener(XMPPEvents.MUC_MEMBER_LEFT,
         conference.onMemberLeft.bind(conference));
+    this.chatRoomForwarder.forward(XMPPEvents.MUC_LEFT,
+        JitsiConferenceEvents.CONFERENCE_LEFT);
 
     chatRoom.addListener(XMPPEvents.DISPLAY_NAME_CHANGED,
         conference.onDisplayNameChanged.bind(conference));
@@ -395,11 +413,6 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
     });
 
     if(conference.statistics) {
-        chatRoom.addListener(XMPPEvents.DISPOSE_CONFERENCE,
-            function () {
-                conference.statistics.dispose();
-            });
-
         chatRoom.addListener(XMPPEvents.CONNECTION_ICE_FAILED,
             function (pc) {
                 conference.statistics.sendIceConnectionFailedEvent(pc);
@@ -441,7 +454,7 @@ JitsiConferenceEventManager.prototype.setupRTCListeners = function () {
     this.rtcForwarder = new EventEmitterForwarder(conference.rtc,
         this.conference.eventEmitter);
 
-    conference.rtc.addListener(RTCEvents.DOMINANTSPEAKER_CHANGED,
+    conference.rtc.addListener(RTCEvents.DOMINANT_SPEAKER_CHANGED,
         function (id) {
             if(conference.lastDominantSpeaker !== id && conference.room) {
                 conference.lastDominantSpeaker = id;
@@ -458,7 +471,8 @@ JitsiConferenceEventManager.prototype.setupRTCListeners = function () {
         var now = window.performance.now();
         logger.log("(TIME) data channel opened ", now);
         conference.room.connectionTimes["data.channel.opened"] = now;
-        Statistics.analytics.sendEvent('conference.dataChannel.open', now);
+        Statistics.analytics.sendEvent('conference.dataChannel.open',
+            {value: now});
     });
 
     this.rtcForwarder.forward(RTCEvents.LASTN_CHANGED,
@@ -474,9 +488,16 @@ JitsiConferenceEventManager.prototype.setupRTCListeners = function () {
 
     conference.rtc.addListener(RTCEvents.ENDPOINT_MESSAGE_RECEIVED,
         function (from, payload) {
-            conference.eventEmitter.emit(
-                JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
-                conference.getParticipantById(from), payload);
+            const participant = conference.getParticipantById(from);
+            if (participant) {
+                conference.eventEmitter.emit(
+                    JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
+                    participant, payload);
+            } else {
+                logger.warn(
+                    "Ignored ENDPOINT_MESSAGE_RECEIVED " +
+                    "for not existing participant: " + from, payload);
+            }
         });
 };
 
@@ -487,6 +508,8 @@ JitsiConferenceEventManager.prototype.setupXMPPListeners = function () {
     var conference = this.conference;
     conference.xmpp.addListener(
         XMPPEvents.CALL_INCOMING, conference.onIncomingCall.bind(conference));
+    conference.xmpp.addListener(
+        XMPPEvents.CALL_ENDED, conference.onCallEnded.bind(conference));
 
     conference.xmpp.addListener(XMPPEvents.START_MUTED_FROM_FOCUS,
         function (audioMuted, videoMuted) {
@@ -556,10 +579,6 @@ JitsiConferenceEventManager.prototype.setupStatisticsListeners = function () {
 
         conference.eventEmitter.emit(
             JitsiConferenceEvents.CONNECTION_STATS, stats);
-    });
-
-    conference.statistics.addAudioProblemListener(function (ssrc) {
-        conference._reportAudioProblem(ssrc);
     });
 
     conference.statistics.addByteSentStatsListener(function (stats) {

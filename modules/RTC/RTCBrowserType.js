@@ -107,6 +107,16 @@ var RTCBrowserType = {
     },
 
     /**
+     * Checks if the current browser triggers 'onmute'/'onunmute' events when
+     * user's connection is interrupted and the video stops playback.
+     * @returns {*|boolean} 'true' if the event is supported or 'false'
+     * otherwise.
+     */
+    isVideoMuteOnConnInterruptedSupported: function () {
+        return RTCBrowserType.isChrome();
+    },
+
+    /**
      * Returns Firefox version.
      * @returns {number|null}
      */
@@ -137,6 +147,14 @@ var RTCBrowserType = {
      */
     isAndroid: function() {
         return isAndroid;
+    },
+
+    /**
+     * Whether jitsi-meet supports simulcast on the current browser.
+     * @returns {boolean}
+     */
+    supportsSimulcast: function() {
+        return RTCBrowserType.isChrome();
     }
 
     // Add version getters for other browsers when needed

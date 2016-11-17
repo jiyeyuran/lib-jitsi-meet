@@ -51,7 +51,9 @@ The ```options``` parameter is JS object with the following properties:
     10. disableSimulcast - boolean property. Enables/disables simulcast.
     11. enableWindowOnErrorHandler - boolean property (default false). Enables/disables attaching global onerror handler (window.onerror).
     12. disableThirdPartyRequests - if true - callstats will be disabled and the callstats API won't be included.
-    13. analyticsScriptUrl - (optional) custom url to search for the analytics lib, if missing js file will be expected to be next to the library file (the location it is sourced from) 
+    13. analyticsScriptUrl - (optional) custom url to search for the analytics lib, if missing js file will be expected to be next to the library file (the location it is sourced from)
+    14. callStatsCustomScriptUrl - (optional) custom url to access callstats client script 
+    15. callStatsConfIDNamespace - (optional) a namespace to prepend the callstats conference ID with. Defaults to the window.location.hostname
 
 * ```JitsiMeetJS.JitsiConnection``` - the ```JitsiConnection``` constructor. You can use that to create new server connection.
 
@@ -203,6 +205,7 @@ This objects represents the server connection. You can create new ```JitsiConnec
             - muc
             - anonymousdomain
         3. useStunTurn -
+        4. enableLipSync - (optional) boolean property which enables the lipsync feature. Currently works only in Chrome and is enabled by default.
 
 2. connect(options) - establish server connection
     - options - JS Object with ```id``` and ```password``` properties.
@@ -217,6 +220,7 @@ This objects represents the server connection. You can create new ```JitsiConnec
         3. jirecon
         4. callStatsID - callstats credentials
         5. callStatsSecret - callstats credentials
+        6. enableTalkWhileMuted - boolean property. Enables/disables talk while muted detection, by default the value is false/disabled.
         **NOTE: if 4 and 5 are set the library is going to send events to callstats. Otherwise the callstats integration will be disabled.**
 
 5. addEventListener(event, listener) - Subscribes the passed listener to the event.
