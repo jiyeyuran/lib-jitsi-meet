@@ -236,8 +236,14 @@ var ScreenObtainer = {
         } else {
             if (chromeExtUpdateRequired) {
                 alert(
-                    'Jitsi Desktop Streamer requires update. ' +
+                    'Jhmeeting Desktop Streamer requires update. ' +
                     'Changes will take effect after next Chrome restart.');
+            }
+            if (window.InWall) {
+                this.handleExtensionInstallationError(options, 
+                    streamCallback, failCallback, "in wall"
+                );
+                return;
             }
 
             try {
