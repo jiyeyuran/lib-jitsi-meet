@@ -39,21 +39,21 @@ You can access the following methods and objects trough ```JitsiMeetJS``` object
 *  ```JitsiMeetJS.init(options)``` - this method initialized Jitsi Meet API.
 The ```options``` parameter is JS object with the following properties:
     1. useIPv6 - boolean property
-    2. desktopSharingChromeMethod - Desktop sharing method. Can be set to 'ext', 'webrtc' or false to disable.
-    3. desktopSharingChromeExtId - The ID of the jidesha extension for Chrome or Firefox. Example: 'mbocklcggfhnbahlnepmldehdhpjfcjp'
-    desktopSharingChromeSources - Array of strings with the media sources to use when using screen sharing with the Chrome extension. Example: ['screen', 'window']
-    4. desktopSharingChromeMinExtVersion - Required version of Chrome extension. Example: '0.1'
-    5. desktopSharingFirefoxExtId - The ID of the jidesha extension for Firefox. If null, we assume that no extension is required.
-    6. desktopSharingFirefoxDisabled - Boolean. Whether desktop sharing should be disabled on Firefox. Example: false.
-    7. desktopSharingFirefoxMaxVersionExtRequired - The maximum version of Firefox which requires a jidesha extension. Example: if set to 41, we will require the extension for Firefox versions up to and including 41. On Firefox 42 and higher, we will run without the extension. If set to -1, an extension will be required for all versions of Firefox.
-    8. desktopSharingFirefoxExtensionURL - The URL to the Firefox extension for desktop sharing. "null" if no extension is required.
-    9. disableAudioLevels - boolean property. Enables/disables audio levels.
-    10. disableSimulcast - boolean property. Enables/disables simulcast.
-    11. enableWindowOnErrorHandler - boolean property (default false). Enables/disables attaching global onerror handler (window.onerror).
-    12. disableThirdPartyRequests - if true - callstats will be disabled and the callstats API won't be included.
-    13. analyticsScriptUrl - (optional) custom url to search for the analytics lib, if missing js file will be expected to be next to the library file (the location it is sourced from)
-    14. callStatsCustomScriptUrl - (optional) custom url to access callstats client script 
-    15. callStatsConfIDNamespace - (optional) a namespace to prepend the callstats conference ID with. Defaults to the window.location.hostname
+    2. desktopSharingChromeExtId - The ID of the jidesha extension for Chrome. Example: 'mbocklcggfhnbahlnepmldehdhpjfcjp'
+    3. desktopSharingChromeDisabled - Boolean. Whether desktop sharing should be disabled on Chrome. Example: false.
+    4. desktopSharingChromeSources - Array of strings with the media sources to use when using screen sharing with the Chrome extension. Example: ['screen', 'window']
+    5. desktopSharingChromeMinExtVersion - Required version of Chrome extension. Example: '0.1'
+    6. desktopSharingFirefoxExtId - The ID of the jidesha extension for Firefox. If null, we assume that no extension is required.
+    7. desktopSharingFirefoxDisabled - Boolean. Whether desktop sharing should be disabled on Firefox. Example: false.
+    8. desktopSharingFirefoxMaxVersionExtRequired - The maximum version of Firefox which requires a jidesha extension. Example: if set to 41, we will require the extension for Firefox versions up to and including 41. On Firefox 42 and higher, we will run without the extension. If set to -1, an extension will be required for all versions of Firefox.
+    9. desktopSharingFirefoxExtensionURL - The URL to the Firefox extension for desktop sharing. "null" if no extension is required.
+    10. disableAudioLevels - boolean property. Enables/disables audio levels.
+    11. disableSimulcast - boolean property. Enables/disables simulcast.
+    12. enableWindowOnErrorHandler - boolean property (default false). Enables/disables attaching global onerror handler (window.onerror).
+    13. disableThirdPartyRequests - if true - callstats will be disabled and the callstats API won't be included.
+    14. enableAnalyticsLogging - boolean property (default false). Enables/disables analytics logging.
+    15. callStatsCustomScriptUrl - (optional) custom url to access callstats client script
+    16. callStatsConfIDNamespace - (optional) a namespace to prepend the callstats conference ID with. Defaults to the window.location.hostname
 
 * ```JitsiMeetJS.JitsiConnection``` - the ```JitsiConnection``` constructor. You can use that to create new server connection.
 
@@ -121,6 +121,7 @@ JitsiMeetJS.setLogLevel(JitsiMeetJS.logLevels.ERROR);
         - STARTED_MUTED - notifies that the local user has started muted
         - AVAILABLE_DEVICES_CHANGED - notifies that available participant devices changed (camera or microphone was added or removed) (parameters - id(string), devices(JS object with 2 properties - audio(boolean), video(boolean)))
         - CONNECTION_STATS - New local connection statistics are received. (parameters - stats(object))
+        - BEFORE_STATISTICS_DISPOSED - fired just before the statistics module is disposed and it's the last chance to submit some logs to the statistics service, before it gets disconnected
         - AUTH_STATUS_CHANGED - notifies that authentication is enabled or disabled, or local user authenticated (logged in). (parameters - isAuthEnabled(boolean), authIdentity(string))
         - ENDPOINT_MESSAGE_RECEIVED - notifies that a new message
         from another participant is received on a data channel.
@@ -230,6 +231,14 @@ This objects represents the server connection. You can create new ```JitsiConnec
 6. removeEventListener(event, listener) - Removes event listener.
     - event - the event
     - listener - the listener that will be removed.
+
+7. addFeature - Adds new feature to the list of supported features for the local participant
+    - feature - string, the name of the feature
+    - submit - boolean, default false, if true - the new list of features will be immediately submitted to the others.
+
+8. removeFeature - Removes a feature from the list of supported features for the local participant
+    - feature - string, the name of the feature
+    - submit - boolean, default false, if true - the new list of features will be immediately submitted to the others.
 
 JitsiConference
 -----------

@@ -14,6 +14,14 @@ export const AVAILABLE_DEVICES_CHANGED = "conference.availableDevicesChanged";
  * A participant avatar has changed.
  */
 export const AVATAR_CHANGED = "conference.avatarChanged";
+
+/**
+ * Fired just before the statistics module is disposed and it's the last chance
+ * to submit some logs to the statistics service (ex. CallStats if enabled),
+ * before it's disconnected.
+ */
+export const BEFORE_STATISTICS_DISPOSED = "conference.beforeStatisticsDisposed";
+
 /**
  * Indicates that an error occured.
  */
@@ -92,6 +100,11 @@ export const MESSAGE_RECEIVED = "conference.messageReceived";
  */
 export const PARTICIPANT_CONN_STATUS_CHANGED
     = "conference.participant_conn_status_changed";
+/**
+ * Indicates that the features of the participant has been changed.
+ */
+export const PARTCIPANT_FEATURES_CHANGED
+    = "conference.partcipant_features_changed";
 /**
  * Indicates that a the value of a specific property of a specific participant
  * has changed.

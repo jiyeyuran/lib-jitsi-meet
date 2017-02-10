@@ -506,6 +506,16 @@ JitsiConferenceEventManager.prototype.setupRTCListeners = function () {
  */
 JitsiConferenceEventManager.prototype.setupXMPPListeners = function () {
     var conference = this.conference;
+    conference.xmpp.caps.addListener(XMPPEvents.PARTCIPANT_FEATURES_CHANGED,
+        from => {
+            const participant = conference.getParticipantId(
+                Strophe.getResourceFromJid(from));
+            if(participant) {
+                conference.eventEmitter.emit(
+                    JitsiConferenceEvents.PARTCIPANT_FEATURES_CHANGED,
+                    participant);
+            }
+        });
     conference.xmpp.addListener(
         XMPPEvents.CALL_INCOMING, conference.onIncomingCall.bind(conference));
     conference.xmpp.addListener(
@@ -547,6 +557,11 @@ JitsiConferenceEventManager.prototype.setupStatisticsListeners = function () {
             return;
 
         conference.rtc.setAudioLevel(resource, level);
+    });
+    // Forward the "before stats disposed" event
+    conference.statistics.addBeforeDisposedListener(function () {
+        conference.eventEmitter.emit(
+            JitsiConferenceEvents.BEFORE_STATISTICS_DISPOSED);
     });
     conference.statistics.addConnectionStatsListener(function (stats) {
         var ssrc2resolution = stats.resolution;
