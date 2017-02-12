@@ -69,8 +69,8 @@ AdapterJS.WebRTCPlugin.pluginInfo = AdapterJS.WebRTCPlugin.pluginInfo || {
   downloadLink : null, //set below
   companyName: 'Temasys',
   downloadLinks : {
-    mac: 'http://jhmeeting-1251620617.cosgz.myqcloud.com/plugin/TemWebRTCPlugin.dmg',
-    win: 'http://jhmeeting-1251620617.cosgz.myqcloud.com/plugin/TemWebRTCPlugin.msi'
+    mac: 'http://bit.ly/webrtcpluginpkg',
+    win: 'http://bit.ly/webrtcpluginmsi'
   }
 };
 if(typeof AdapterJS.WebRTCPlugin.pluginInfo.downloadLinks !== "undefined" && AdapterJS.WebRTCPlugin.pluginInfo.downloadLinks !== null) {

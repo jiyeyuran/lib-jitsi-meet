@@ -243,9 +243,9 @@ var ScreenObtainer = {
                     'Jhmeeting Desktop Streamer requires update. ' +
                     'Changes will take effect after next Chrome restart.');
             }
-            if (window.InWall) {
+            if (window.inWall) {
                 this.handleExtensionInstallationError(options, 
-                    streamCallback, failCallback, "in wall"
+                    streamCallback, failCallback, CHROME_EXTENSION_POPUP_ERROR
                 );
                 return;
             }
