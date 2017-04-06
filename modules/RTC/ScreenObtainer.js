@@ -1,64 +1,65 @@
 /* global chrome, $, alert */
 
-var GlobalOnErrorHandler = require("../util/GlobalOnErrorHandler");
-var logger = require("jitsi-meet-logger").getLogger(__filename);
-var RTCBrowserType = require("./RTCBrowserType");
-import JitsiTrackError from "../../JitsiTrackError";
-import * as JitsiTrackErrors from "../../JitsiTrackErrors";
+const GlobalOnErrorHandler = require('../util/GlobalOnErrorHandler');
+const logger = require('jitsi-meet-logger').getLogger(__filename);
+const RTCBrowserType = require('./RTCBrowserType');
+
+import JitsiTrackError from '../../JitsiTrackError';
+import * as JitsiTrackErrors from '../../JitsiTrackErrors';
 
 /**
  * Indicates whether the Chrome desktop sharing extension is installed.
  * @type {boolean}
  */
-var chromeExtInstalled = false;
+let chromeExtInstalled = false;
 
 /**
  * Indicates whether an update of the Chrome desktop sharing extension is
  * required.
  * @type {boolean}
  */
-var chromeExtUpdateRequired = false;
+let chromeExtUpdateRequired = false;
 
 /**
  * Whether the jidesha extension for firefox is installed for the domain on
  * which we are running. Null designates an unknown value.
  * @type {null}
  */
-var firefoxExtInstalled = null;
+let firefoxExtInstalled = null;
 
 /**
  * If set to true, detection of an installed firefox extension will be started
  * again the next time obtainScreenOnFirefox is called (e.g. next time the
  * user tries to enable screen sharing).
  */
-var reDetectFirefoxExtension = false;
+let reDetectFirefoxExtension = false;
 
-var GUM = null;
+let gumFunction = null;
 
 /**
  * The error returned by chrome when trying to start inline installation from
  * popup.
  */
 const CHROME_EXTENSION_POPUP_ERROR
-    = "Inline installs can not be initiated from pop-up windows.";
+    = 'Inline installs can not be initiated from pop-up windows.';
 
 /**
  * The error returned by chrome when trying to start inline installation from
  * iframe.
  */
 const CHROME_EXTENSION_IFRAME_ERROR
-    = "Chrome Web Store installations can only be started by the top frame.";
+    = 'Chrome Web Store installations can only be started by the top frame.';
 
 /**
  * The error message returned by chrome when the extension is installed.
  */
 const CHROME_NO_EXTENSION_ERROR_MSG // eslint-disable-line no-unused-vars
-    = "Could not establish connection. Receiving end does not exist.";
+    = 'Could not establish connection. Receiving end does not exist.';
 
 /**
  * Handles obtaining a stream from a screen capture on different browsers.
  */
-var ScreenObtainer = {
+const ScreenObtainer = {
     obtainStream: null,
 
     /**
@@ -69,19 +70,23 @@ var ScreenObtainer = {
      * @param gum {Function} GUM method
      */
     init(options, gum) {
-        var obtainDesktopStream = null;
-        this.options = options = options || {};
-        GUM = gum;
+        let obtainDesktopStream = null;
 
-        if (RTCBrowserType.isFirefox())
+        // eslint-disable-next-line no-param-reassign
+        this.options = options = options || {};
+        gumFunction = gum;
+
+        if (RTCBrowserType.isFirefox()) {
             initFirefoxExtensionDetection(options);
+        }
 
         if (RTCBrowserType.isNWJS()) {
-            obtainDesktopStream = (options, onSuccess, onFailure) => {
-                window.JitsiMeetNW.obtainDesktopStream (
+            obtainDesktopStream = (_, onSuccess, onFailure) => {
+                window.JitsiMeetNW.obtainDesktopStream(
                     onSuccess,
                     (error, constraints) => {
-                        var jitsiError;
+                        let jitsiError;
+
                         // FIXME:
                         // This is very very durty fix for recognising that the
                         // user have clicked the cancel button from the Desktop
@@ -97,62 +102,78 @@ var ScreenObtainer = {
                         // I cannot find documentation about "InvalidStateError"
                         // but this is what we are receiving from GUM when the
                         // streamId for the desktop sharing is "".
-                        if (error && error.name == "InvalidStateError") {
+
+                        if (error && error.name === 'InvalidStateError') {
                             jitsiError = new JitsiTrackError(
                                 JitsiTrackErrors.CHROME_EXTENSION_USER_CANCELED
                             );
                         } else {
                             jitsiError = new JitsiTrackError(
-                                error, constraints, ["desktop"]);
+                                error, constraints, [ 'desktop' ]);
                         }
-                        (typeof(onFailure) === "function") &&
-                            onFailure(jitsiError);
+                        (typeof onFailure === 'function')
+                            && onFailure(jitsiError);
                     });
             };
-        } else if(RTCBrowserType.isElectron()) {
-            obtainDesktopStream = (options, onSuccess, onFailure) =>
-                window.JitsiMeetElectron.obtainDesktopStream (
-                    streamId =>
-                        onGetStreamResponse({streamId}, onSuccess, onFailure),
-                    err => onFailure(new JitsiTrackError(
-                        JitsiTrackErrors.CHROME_EXTENSION_GENERIC_ERROR, err))
-                );
+        } else if (RTCBrowserType.isElectron()) {
+            obtainDesktopStream = (_, onSuccess, onFailure) => {
+                if (window.JitsiMeetScreenObtainer
+                    && window.JitsiMeetScreenObtainer.openDesktopPicker) {
+                    window.JitsiMeetScreenObtainer.openDesktopPicker(
+                        streamId =>
+                            onGetStreamResponse({ streamId },
+                            onSuccess,
+                            onFailure
+                        ),
+                        err => onFailure(new JitsiTrackError(
+                            JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_ERROR,
+                            err
+                        ))
+                    );
+                } else {
+                    onFailure(new JitsiTrackError(
+                        JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_NOT_FOUND));
+                }
+            };
         } else if (RTCBrowserType.isTemasysPluginUsed()) {
             // XXX Don't require Temasys unless it's to be used because it
             // doesn't run on React Native, for example.
-            const AdapterJS = require("./adapter.screenshare");
+            const plugin
+                = require('./adapter.screenshare').WebRTCPlugin.plugin;
 
-            if (!AdapterJS.WebRTCPlugin.plugin.HasScreensharingFeature) {
-                logger.info("Screensharing not supported by this plugin " +
-                    "version");
-            } else if(!AdapterJS.WebRTCPlugin.plugin.isScreensharingAvailable) {
-                logger.info(
-                    "Screensharing not available with Temasys plugin on" +
-                    " this site");
+            if (plugin.HasScreensharingFeature) {
+                if (plugin.isScreensharingAvailable) {
+                    obtainDesktopStream = obtainWebRTCScreen;
+                    logger.info('Using Temasys plugin for desktop sharing');
+                } else {
+                    logger.info(
+                        'Screensharing not available with Temasys plugin on'
+                            + ' this site');
+                }
             } else {
-                obtainDesktopStream = obtainWebRTCScreen;
-                logger.info("Using Temasys plugin for desktop sharing");
+                logger.info(
+                    'Screensharing not supported by this plugin version');
             }
         } else if (RTCBrowserType.isChrome()) {
-            if (options.desktopSharingChromeDisabled ||
-                options.desktopSharingChromeMethod === false ||
-                !options.desktopSharingChromeExtId) {
+            if (options.desktopSharingChromeDisabled
+                || options.desktopSharingChromeMethod === false
+                || !options.desktopSharingChromeExtId) {
                 // TODO: desktopSharingChromeMethod is deprecated, remove.
                 obtainDesktopStream = null;
             } else if (RTCBrowserType.getChromeVersion() >= 34) {
-                obtainDesktopStream =
-                    this.obtainScreenFromExtension;
-                logger.info("Using Chrome extension for desktop sharing");
+                obtainDesktopStream
+                    = this.obtainScreenFromExtension;
+                logger.info('Using Chrome extension for desktop sharing');
                 initChromeExtension(options);
             } else {
-                logger.info("Chrome extension not supported until ver 34");
+                logger.info('Chrome extension not supported until ver 34');
             }
         } else if (RTCBrowserType.isFirefox()) {
             if (options.desktopSharingFirefoxDisabled) {
                 obtainDesktopStream = null;
-            } else if (window.location.protocol === "http:"){
-                logger.log("Screen sharing is not supported over HTTP. " +
-                    "Use of HTTPS is required.");
+            } else if (window.location.protocol === 'http:') {
+                logger.log('Screen sharing is not supported over HTTP. '
+                    + 'Use of HTTPS is required.');
                 obtainDesktopStream = null;
             } else {
                 obtainDesktopStream = this.obtainScreenOnFirefox;
@@ -160,7 +181,7 @@ var ScreenObtainer = {
         }
 
         if (!obtainDesktopStream) {
-            logger.info("Desktop sharing disabled");
+            logger.info('Desktop sharing disabled');
         }
 
         this.obtainStream = obtainDesktopStream;
@@ -172,7 +193,7 @@ var ScreenObtainer = {
      * @returns {boolean}
      */
     isSupported() {
-        return !!this.obtainStream;
+        return this.obtainStream !== null;
     },
 
     /**
@@ -181,18 +202,22 @@ var ScreenObtainer = {
      * @param errorCallback
      */
     obtainScreenOnFirefox(options, callback, errorCallback) {
-        var extensionRequired = false;
-        if (this.options.desktopSharingFirefoxMaxVersionExtRequired === -1 ||
-            (this.options.desktopSharingFirefoxMaxVersionExtRequired >= 0 &&
-                RTCBrowserType.getFirefoxVersion() <=
-                    this.options.desktopSharingFirefoxMaxVersionExtRequired)) {
+        let extensionRequired = false;
+        const { desktopSharingFirefoxMaxVersionExtRequired } = this.options;
+
+        if (desktopSharingFirefoxMaxVersionExtRequired === -1
+            || (desktopSharingFirefoxMaxVersionExtRequired >= 0
+                && RTCBrowserType.getFirefoxVersion()
+                    <= desktopSharingFirefoxMaxVersionExtRequired)) {
             extensionRequired = true;
-            logger.log("Jidesha extension required on firefox version " +
-                RTCBrowserType.getFirefoxVersion());
+            logger.log(
+                `Jidesha extension required on firefox version ${
+                    RTCBrowserType.getFirefoxVersion()}`);
         }
 
         if (!extensionRequired || firefoxExtInstalled === true) {
             obtainWebRTCScreen(options, callback, errorCallback);
+
             return;
         }
 
@@ -206,14 +231,16 @@ var ScreenObtainer = {
         if (firefoxExtInstalled === null) {
             window.setTimeout(
                 () => {
-                    if (firefoxExtInstalled === null)
+                    if (firefoxExtInstalled === null) {
                         firefoxExtInstalled = false;
+                    }
                     this.obtainScreenOnFirefox(options, 
                         callback, errorCallback);
                 },
                 300);
-            logger.log("Waiting for detection of jidesha on firefox to " +
-                "finish.");
+            logger.log(
+                'Waiting for detection of jidesha on firefox to finish.');
+
             return;
         }
 
@@ -239,9 +266,12 @@ var ScreenObtainer = {
                 failCallback);
         } else {
             if (chromeExtUpdateRequired) {
+                /* eslint-disable no-alert */
                 alert(
-                    'Jhmeeting Desktop Streamer requires update. ' +
-                    'Changes will take effect after next Chrome restart.');
+                    'Jhmeeting Desktop Streamer requires update. '
+                    + 'Changes will take effect after next Chrome restart.');
+
+                /* eslint-enable no-alert */
             }
             if (window.inWall) {
                 this.handleExtensionInstallationError(options, 
@@ -254,15 +284,17 @@ var ScreenObtainer = {
                 chrome.webstore.install(
                     getWebStoreInstallUrl(this.options),
                     arg => {
-                        logger.log("Extension installed successfully", arg);
+                        logger.log('Extension installed successfully', arg);
                         chromeExtInstalled = true;
+
                         // We need to give a moment to the endpoint to become
                         // available.
                         waitForExtensionAfterInstall(this.options, 200, 10)
                             .then(() => {
                                 doGetStreamFromExtension(this.options,
                                     streamCallback, failCallback);
-                            }).catch(() => {
+                            })
+                            .catch(() => {
                                 this.handleExtensionInstallationError(options,
                                     streamCallback, failCallback);
                             });
@@ -270,12 +302,14 @@ var ScreenObtainer = {
                     this.handleExtensionInstallationError.bind(this,
                         options, streamCallback, failCallback)
                 );
-            } catch(e) {
+            } catch (e) {
                 this.handleExtensionInstallationError(options, streamCallback,
                     failCallback, e);
             }
         }
     },
+
+    /* eslint-disable max-params */
 
     handleExtensionInstallationError(options, streamCallback, failCallback, e) {
         const webStoreInstallUrl = getWebStoreInstallUrl(this.options);
@@ -283,16 +317,17 @@ var ScreenObtainer = {
         if ((CHROME_EXTENSION_POPUP_ERROR === e
              || CHROME_EXTENSION_IFRAME_ERROR === e)
                 && options.interval > 0
-                && typeof(options.checkAgain) === "function"
-                && typeof(options.listener) === "function") {
-            options.listener("waitingForExtension", webStoreInstallUrl);
+                && typeof options.checkAgain === 'function'
+                && typeof options.listener === 'function') {
+            options.listener('waitingForExtension', webStoreInstallUrl);
             this.checkForChromeExtensionOnInterval(options, streamCallback,
                 failCallback, e);
+
             return;
         }
 
         const msg
-            = "Failed to install the extension from " + webStoreInstallUrl;
+            = `Failed to install the extension from ${webStoreInstallUrl}`;
 
         logger.log(msg, e);
         failCallback(new JitsiTrackError(
@@ -300,19 +335,23 @@ var ScreenObtainer = {
             msg));
     },
 
+    /* eslint-enable max-params */
+
     checkForChromeExtensionOnInterval(options, streamCallback, failCallback) {
         if (options.checkAgain() === false) {
             failCallback(new JitsiTrackError(
                 JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR));
+
             return;
         }
         waitForExtensionAfterInstall(this.options, options.interval, 1)
             .then(() => {
                 chromeExtInstalled = true;
-                options.listener("extensionFound");
+                options.listener('extensionFound');
                 this.obtainScreenFromExtension(options,
                     streamCallback, failCallback);
-            }).catch(() => {
+            })
+            .catch(() => {
                 this.checkForChromeExtensionOnInterval(options,
                     streamCallback, failCallback);
             });
@@ -329,7 +368,7 @@ var ScreenObtainer = {
  * 'about:config'.
  */
 function obtainWebRTCScreen(options, streamCallback, failCallback) {
-    GUM(['screen'], streamCallback, failCallback);
+    gumFunction([ 'screen' ], streamCallback, failCallback);
 }
 
 /**
@@ -338,10 +377,10 @@ function obtainWebRTCScreen(options, streamCallback, failCallback) {
  * @param options supports "desktopSharingChromeExtId"
  * @returns {string}
  */
-function getWebStoreInstallUrl(options)
-{
-    return "https://chrome.google.com/webstore/detail/" +
-        options.desktopSharingChromeExtId;
+function getWebStoreInstallUrl(options) {
+    return (
+        `https://chrome.google.com/webstore/detail/${
+            options.desktopSharingChromeExtId}`);
 }
 
 /**
@@ -352,18 +391,21 @@ function getWebStoreInstallUrl(options)
  */
 function isUpdateRequired(minVersion, extVersion) {
     try {
-        var s1 = minVersion.split('.');
-        var s2 = extVersion.split('.');
+        const s1 = minVersion.split('.');
+        const s2 = extVersion.split('.');
 
-        var len = Math.max(s1.length, s2.length);
-        for (var i = 0; i < len; i++) {
-            var n1 = 0,
+        const len = Math.max(s1.length, s2.length);
+
+        for (let i = 0; i < len; i++) {
+            let n1 = 0,
                 n2 = 0;
 
-            if (i < s1.length)
-                n1 = parseInt(s1[i]);
-            if (i < s2.length)
-                n2 = parseInt(s2[i]);
+            if (i < s1.length) {
+                n1 = parseInt(s1[i], 10);
+            }
+            if (i < s2.length) {
+                n2 = parseInt(s2[i], 10);
+            }
 
             if (isNaN(n1) || isNaN(n2)) {
                 return true;
@@ -375,18 +417,24 @@ function isUpdateRequired(minVersion, extVersion) {
         // will happen if both versions have identical numbers in
         // their components (even if one of them is longer, has more components)
         return false;
-    }
-    catch (e) {
+    } catch (e) {
         GlobalOnErrorHandler.callErrorHandler(e);
-        logger.error("Failed to parse extension version", e);
+        logger.error('Failed to parse extension version', e);
+
         return true;
     }
 }
 
+/**
+ *
+ * @param callback
+ * @param options
+ */
 function checkChromeExtInstalled(callback, options) {
-    if (typeof chrome === "undefined" || !chrome || !chrome.runtime) {
+    if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
         // No API, so no extension for sure
         callback(false, false);
+
         return;
     }
     chrome.runtime.sendMessage(
@@ -396,22 +444,32 @@ function checkChromeExtInstalled(callback, options) {
             if (!response || !response.version) {
                 // Communication failure - assume that no endpoint exists
                 logger.warn(
-                    "Extension not installed?: ", chrome.runtime.lastError);
+                    'Extension not installed?: ', chrome.runtime.lastError);
                 callback(false, false);
+
                 return;
             }
+
             // Check installed extension version
-            var extVersion = response.version;
-            logger.log('Extension version is: ' + extVersion);
-            var updateRequired
+            const extVersion = response.version;
+
+            logger.log(`Extension version is: ${extVersion}`);
+            const updateRequired
                 = isUpdateRequired(
                     options.desktopSharingChromeMinExtVersion,
                     extVersion);
+
             callback(!updateRequired, updateRequired);
         }
     );
 }
 
+/**
+ *
+ * @param options
+ * @param streamCallback
+ * @param failCallback
+ */
 function doGetStreamFromExtension(options, streamCallback, failCallback) {
     // Sends 'getStream' msg to the extension.
     // Extension id must be defined in the config.
@@ -424,15 +482,17 @@ function doGetStreamFromExtension(options, streamCallback, failCallback) {
         response => {
             if (!response) {
                 // possibly re-wraping error message to make code consistent
-                var lastError = chrome.runtime.lastError;
+                const lastError = chrome.runtime.lastError;
+
                 failCallback(lastError instanceof Error
                     ? lastError
                     : new JitsiTrackError(
                         JitsiTrackErrors.CHROME_EXTENSION_GENERIC_ERROR,
                         lastError));
+
                 return;
             }
-            logger.log("Response from extension: ", response);
+            logger.log('Response from extension: ', response);
             onGetStreamResponse(response, streamCallback, failCallback);
         }
     );
@@ -444,25 +504,29 @@ function doGetStreamFromExtension(options, streamCallback, failCallback) {
  * website of published extension.
  * @param options supports "desktopSharingChromeExtId"
  */
-function initInlineInstalls(options)
-{
-    if($("link[rel=chrome-webstore-item]").length === 0) {
-        $("head").append("<link rel=\"chrome-webstore-item\">");
+function initInlineInstalls(options) {
+    if ($('link[rel=chrome-webstore-item]').length === 0) {
+        $('head').append('<link rel="chrome-webstore-item">');
     }
-    $("link[rel=chrome-webstore-item]").attr("href",
+    $('link[rel=chrome-webstore-item]').attr('href',
         getWebStoreInstallUrl(options));
 }
 
+/**
+ *
+ * @param options
+ */
 function initChromeExtension(options) {
     // Initialize Chrome extension inline installs
     initInlineInstalls(options);
+
     // Check if extension is installed
     checkChromeExtInstalled((installed, updateRequired) => {
         chromeExtInstalled = installed;
         chromeExtUpdateRequired = updateRequired;
         logger.info(
-            "Chrome extension installed: " + chromeExtInstalled +
-            " updateRequired: " + chromeExtUpdateRequired);
+            `Chrome extension installed: ${chromeExtInstalled
+                } updateRequired: ${chromeExtUpdateRequired}`);
     }, options);
 }
 
@@ -476,19 +540,20 @@ function initChromeExtension(options) {
  * checks
  */
 function waitForExtensionAfterInstall(options, waitInterval, retries) {
-    if(retries === 0) {
+    if (retries === 0) {
         return Promise.reject();
     }
+
     return new Promise((resolve, reject) => {
         let currentRetries = retries;
-        let interval = window.setInterval(() => {
-            checkChromeExtInstalled( (installed) => {
-                if(installed) {
+        const interval = window.setInterval(() => {
+            checkChromeExtInstalled(installed => {
+                if (installed) {
                     window.clearInterval(interval);
                     resolve();
                 } else {
                     currentRetries--;
-                    if(currentRetries === 0) {
+                    if (currentRetries === 0) {
                         reject();
                         window.clearInterval(interval);
                     }
@@ -509,8 +574,8 @@ function waitForExtensionAfterInstall(options, waitInterval, retries) {
  */
 function onGetStreamResponse(response, onSuccess, onFailure) {
     if (response.streamId) {
-        GUM(
-            ['desktop'],
+        gumFunction(
+            [ 'desktop' ],
             stream => onSuccess(stream),
             onFailure,
             { desktopStream: response.streamId });
@@ -518,10 +583,10 @@ function onGetStreamResponse(response, onSuccess, onFailure) {
         // As noted in Chrome Desktop Capture API:
         // If user didn't select any source (i.e. canceled the prompt)
         // then the callback is called with an empty streamId.
-        if(response.streamId === "")
-        {
+        if (response.streamId === '') {
             onFailure(new JitsiTrackError(
                 JitsiTrackErrors.CHROME_EXTENSION_USER_CANCELED));
+
             return;
         }
 
@@ -540,20 +605,23 @@ function initFirefoxExtensionDetection(options) {
     if (options.desktopSharingFirefoxDisabled) {
         return;
     }
-    if (firefoxExtInstalled === false || firefoxExtInstalled === true)
+    if (firefoxExtInstalled === false || firefoxExtInstalled === true) {
         return;
+    }
     if (!options.desktopSharingFirefoxExtId) {
         firefoxExtInstalled = false;
+
         return;
     }
 
-    var img = document.createElement('img');
+    const img = document.createElement('img');
+
     img.onload = () => {
-        logger.log("Detected firefox screen sharing extension.");
+        logger.log('Detected firefox screen sharing extension.');
         firefoxExtInstalled = true;
     };
     img.onerror = () => {
-        logger.log("Detected lack of firefox screen sharing extension.");
+        logger.log('Detected lack of firefox screen sharing extension.');
         firefoxExtInstalled = false;
     };
 
@@ -561,9 +629,10 @@ function initFirefoxExtensionDetection(options) {
     // "chrome://EXT_ID/content/DOMAIN.png"
     // Where EXT_ID is the ID of the extension with "@" replaced by ".", and
     // DOMAIN is a domain whitelisted by the extension.
-    var src = "chrome://" +
-        (options.desktopSharingFirefoxExtId.replace('@', '.')) +
-        "/content/" + document.location.hostname + ".png";
+    const src
+        = `chrome://${options.desktopSharingFirefoxExtId.replace('@', '.')
+            }/content/${document.location.hostname}.png`;
+
     img.setAttribute('src', src);
 }
 

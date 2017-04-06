@@ -1,10 +1,11 @@
 /* global $, Strophe, callstats */
-var logger = require("jitsi-meet-logger").getLogger(__filename);
-var GlobalOnErrorHandler = require("../util/GlobalOnErrorHandler");
-import Settings from "../settings/Settings";
+const logger = require('jitsi-meet-logger').getLogger(__filename);
+const GlobalOnErrorHandler = require('../util/GlobalOnErrorHandler');
 
-var jsSHA = require('jssha');
-var io = require('socket.io-client');
+import Settings from '../settings/Settings';
+
+const jsSHA = require('jssha');
+const io = require('socket.io-client');
 
 /**
  * We define enumeration of wrtcFuncNames as we need them before
@@ -12,16 +13,16 @@ var io = require('socket.io-client');
  * @const
  * @see http://www.callstats.io/api/#enumeration-of-wrtcfuncnames
  */
-var wrtcFuncNames = {
-    createOffer:          "createOffer",
-    createAnswer:         "createAnswer",
-    setLocalDescription:  "setLocalDescription",
-    setRemoteDescription: "setRemoteDescription",
-    addIceCandidate:      "addIceCandidate",
-    getUserMedia:         "getUserMedia",
-    iceConnectionFailure: "iceConnectionFailure",
-    signalingError:       "signalingError",
-    applicationLog:       "applicationLog"
+const wrtcFuncNames = {
+    createOffer: 'createOffer',
+    createAnswer: 'createAnswer',
+    setLocalDescription: 'setLocalDescription',
+    setRemoteDescription: 'setRemoteDescription',
+    addIceCandidate: 'addIceCandidate',
+    getUserMedia: 'getUserMedia',
+    iceConnectionFailure: 'iceConnectionFailure',
+    signalingError: 'signalingError',
+    applicationLog: 'applicationLog'
 };
 
 /**
@@ -30,92 +31,41 @@ var wrtcFuncNames = {
  * @const
  * @see http://www.callstats.io/api/#enumeration-of-fabricevent
  */
-var fabricEvent = {
-    fabricHold:"fabricHold",
-    fabricResume:"fabricResume",
-    audioMute:"audioMute",
-    audioUnmute:"audioUnmute",
-    videoPause:"videoPause",
-    videoResume:"videoResume",
-    fabricUsageEvent:"fabricUsageEvent",
-    fabricStats:"fabricStats",
-    fabricTerminated:"fabricTerminated",
-    screenShareStart:"screenShareStart",
-    screenShareStop:"screenShareStop",
-    dominantSpeaker:"dominantSpeaker",
-    activeDeviceList:"activeDeviceList"
+const fabricEvent = {
+    fabricHold: 'fabricHold',
+    fabricResume: 'fabricResume',
+    audioMute: 'audioMute',
+    audioUnmute: 'audioUnmute',
+    videoPause: 'videoPause',
+    videoResume: 'videoResume',
+    fabricUsageEvent: 'fabricUsageEvent',
+    fabricStats: 'fabricStats',
+    fabricTerminated: 'fabricTerminated',
+    screenShareStart: 'screenShareStart',
+    screenShareStop: 'screenShareStop',
+    dominantSpeaker: 'dominantSpeaker',
+    activeDeviceList: 'activeDeviceList'
 };
 
-var callStats = null;
+let callStats = null;
 
 /**
  * The user id to report to callstats as destination.
  * @type {string}
  */
-const DEFAULT_REMOTE_USER = "jitsi";
+const DEFAULT_REMOTE_USER = 'jitsi';
 
-function initCallback (err, msg) {
-    logger.log("CallStats Status: err=" + err + " msg=" + msg);
+/**
+ * Type of pending reports, can be event or an error.
+ * @type {{ERROR: string, EVENT: string}}
+ */
+const reportType = {
+    ERROR: 'error',
+    EVENT: 'event',
+    MST_WITH_USERID: 'mstWithUserID'
+};
 
-    CallStats.initializeInProgress = false;
-
-    // there is no lib, nothing to report to
-    if (err !== 'success') {
-        CallStats.initializeFailed = true;
-        return;
-    }
-
-    var ret = callStats.addNewFabric(this.peerconnection,
-        DEFAULT_REMOTE_USER,
-        callStats.fabricUsage.multiplex,
-        this.confID,
-        this.pcCallback.bind(this));
-
-    var fabricInitialized = (ret.status === 'success');
-
-    if(!fabricInitialized) {
-        CallStats.initializeFailed = true;
-        logger.log("callstats fabric not initilized", ret.message);
-        return;
-    }
-
-    CallStats.initializeFailed = false;
-    CallStats.initialized = true;
-    CallStats.feedbackEnabled = true;
-
-    // notify callstats about failures if there were any
-    if (CallStats.reportsQueue.length) {
-        CallStats.reportsQueue.forEach(function (report) {
-            if (report.type === reportType.ERROR) {
-                var error = report.data;
-                CallStats._reportError.call(this, error.type, error.error,
-                    error.pc);
-            }
-            // if we have and event to report and we failed to add fabric
-            // this event will not be reported anyway, returning an error
-            else if (report.type === reportType.EVENT
-                && fabricInitialized) {
-                var eventData = report.data;
-                callStats.sendFabricEvent(
-                    this.peerconnection,
-                    eventData.event,
-                    this.confID,
-                    eventData.eventData);
-            } else if (report.type === reportType.MST_WITH_USERID) {
-                var data = report.data;
-                callStats.associateMstWithUserID(
-                    this.peerconnection,
-                    data.callStatsId,
-                    this.confID,
-                    data.ssrc,
-                    data.usageLabel,
-                    data.containerId
-                );
-            }
-        }, this);
-        CallStats.reportsQueue.length = 0;
-    }
-}
+/* eslint-enable no-invalid-this */
 
 /**
  * Returns a function which invokes f in a try/catch block, logs any exception
@@ -125,10 +75,12 @@ function initCallback (err, msg) {
  * @return a function which invokes f in a try/catch block, logs any exception
  * to the console, and then swallows it
  */
-function _try_catch (f) {
-    return function () {
+function tryCatch(f) {
+    return function() {
         try {
-            f.apply(this, arguments);
+
+            // eslint-disable-next-line no-invalid-this
+            f.apply(this, arguments); // eslint-disable-line prefer-rest-params
         } catch (e) {
             GlobalOnErrorHandler.callErrorHandler(e);
             logger.error(e);
@@ -136,13 +88,15 @@ function _try_catch (f) {
     };
 }
 
+/* eslint-disable no-invalid-this */
+
 /**
  * Creates new CallStats instance that handles all callstats API calls.
  * @param peerConnection {JingleSessionPC} the session object
  * @param options {object} credentials for callstats.
  */
-var CallStats = _try_catch(function(jingleSession, options) {
-    try{
+const CallStats = tryCatch(function(jingleSession, options) {
+    try {
         CallStats.feedbackEnabled = false;
         callStats = new callstats($, io, jsSHA); // eslint-disable-line new-cap
 
@@ -154,13 +108,14 @@ var CallStats = _try_catch(function(jingleSession, options) {
         };
 
         // The confID is case sensitive!!!
-        this.confID = options.callStatsConfIDNamespace + "/" + options.roomName;
+        this.confID = `${options.callStatsConfIDNamespace}/${options.roomName}`;
 
         this.callStatsID = options.callStatsID;
         this.callStatsSecret = options.callStatsSecret;
 
         CallStats.initializeInProgress = true;
-        //userID is generated or given by the origin server
+
+        // userID is generated or given by the origin server
         callStats.initialize(this.callStatsID,
             this.callStatsSecret,
             this.userID,
@@ -175,6 +130,8 @@ var CallStats = _try_catch(function(jingleSession, options) {
         logger.error(e);
     }
 });
+
+/* eslint-enable no-invalid-this */
 
 // some errors/events may happen before CallStats init
 // in this case we accumulate them in this array
@@ -210,10 +167,11 @@ CallStats.feedbackEnabled = false;
  * Checks whether we need to re-initialize callstats and starts the process.
  * @private
  */
-CallStats._checkInitialize = function () {
+CallStats._checkInitialize = function() {
     if (CallStats.initialized || !CallStats.initializeFailed
-        || !callStats || CallStats.initializeInProgress)
+        || !callStats || CallStats.initializeInProgress) {
         return;
+    }
 
     // callstats object created, not initialized and it had previously failed,
     // and there is no init in progress, so lets try initialize it again
@@ -225,20 +183,13 @@ CallStats._checkInitialize = function () {
         initCallback.bind(callStats));
 };
 
-/**
- * Type of pending reports, can be event or an error.
- * @type {{ERROR: string, EVENT: string}}
- */
-var reportType = {
-    ERROR: "error",
-    EVENT: "event",
-    MST_WITH_USERID: "mstWithUserID"
-};
-
-CallStats.prototype.pcCallback = _try_catch(function (err, msg) {
-    if (callStats && err !== 'success')
-        logger.error("Monitoring status: "+ err + " msg: " + msg);
+CallStats.prototype.pcCallback = tryCatch((err, msg) => {
+    if (callStats && err !== 'success') {
+        logger.error(`Monitoring status: ${err} msg: ${msg}`);
+    }
 });
+
+/* eslint-disable max-params */
 
 /**
  * Lets CallStats module know where is given SSRC rendered by providing renderer
@@ -252,25 +203,28 @@ CallStats.prototype.pcCallback = _try_catch(function (err, msg) {
  * @param containerId {string} the id of media 'audio' or 'video' tag which
  *        renders the stream.
  */
-CallStats.prototype.associateStreamWithVideoTag =
-function (ssrc, isLocal, usageLabel, containerId) {
-    if(!callStats) {
+CallStats.prototype.associateStreamWithVideoTag = function(
+        ssrc,
+        isLocal,
+        usageLabel,
+        containerId) {
+    if (!callStats) {
         return;
     }
 
     // 'jitsi' is default remote user ID for now
     const callStatsId = isLocal ? this.userID : DEFAULT_REMOTE_USER;
 
-    _try_catch(function() {
+    tryCatch(() => {
         logger.debug(
-            "Calling callStats.associateMstWithUserID with:",
+            'Calling callStats.associateMstWithUserID with:',
             this.peerconnection,
             callStatsId,
             this.confID,
             ssrc,
             usageLabel,
             containerId);
-        if(CallStats.initialized) {
+        if (CallStats.initialized) {
             callStats.associateMstWithUserID(
                 this.peerconnection,
                 callStatsId,
@@ -278,8 +232,7 @@ function (ssrc, isLocal, usageLabel, containerId) {
                 ssrc,
                 usageLabel,
                 containerId);
-        }
-        else {
+        } else {
             CallStats.reportsQueue.push({
                 type: reportType.MST_WITH_USERID,
                 data: {
@@ -291,8 +244,10 @@ function (ssrc, isLocal, usageLabel, containerId) {
             });
             CallStats._checkInitialize();
         }
-    }).bind(this)();
+    })();
 };
+
+/* eslint-enable max-params */
 
 /**
  * Notifies CallStats for mute events
@@ -300,10 +255,10 @@ function (ssrc, isLocal, usageLabel, containerId) {
  * @param type {String} "audio"/"video"
  * @param {CallStats} cs callstats instance related to the event
  */
-CallStats.sendMuteEvent = _try_catch(function (mute, type, cs) {
+CallStats.sendMuteEvent = tryCatch((mute, type, cs) => {
     let event;
 
-    if (type === "video") {
+    if (type === 'video') {
         event = mute ? fabricEvent.videoPause : fabricEvent.videoResume;
     } else {
         event = mute ? fabricEvent.audioMute : fabricEvent.audioUnmute;
@@ -318,7 +273,7 @@ CallStats.sendMuteEvent = _try_catch(function (mute, type, cs) {
  * false for not stopping
  * @param {CallStats} cs callstats instance related to the event
  */
-CallStats.sendScreenSharingEvent = _try_catch(function (start, cs) {
+CallStats.sendScreenSharingEvent = tryCatch((start, cs) => {
     CallStats._reportEvent.call(
         cs,
         start ? fabricEvent.screenShareStart : fabricEvent.screenShareStop);
@@ -328,7 +283,7 @@ CallStats.sendScreenSharingEvent = _try_catch(function (start, cs) {
  * Notifies CallStats that we are the new dominant speaker in the conference.
  * @param {CallStats} cs callstats instance related to the event
  */
-CallStats.sendDominantSpeakerEvent = _try_catch(function (cs) {
+CallStats.sendDominantSpeakerEvent = tryCatch(cs => {
     CallStats._reportEvent.call(cs, fabricEvent.dominantSpeaker);
 });
 
@@ -337,7 +292,7 @@ CallStats.sendDominantSpeakerEvent = _try_catch(function (cs) {
  * @param {{deviceList: {String:String}}} list of devices with their data
  * @param {CallStats} cs callstats instance related to the event
  */
-CallStats.sendActiveDeviceListEvent = _try_catch(function (devicesData, cs) {
+CallStats.sendActiveDeviceListEvent = tryCatch((devicesData, cs) => {
     CallStats._reportEvent.call(cs, fabricEvent.activeDeviceList, devicesData);
 });
 
@@ -350,40 +305,45 @@ CallStats.sendActiveDeviceListEvent = _try_catch(function (devicesData, cs) {
  * @param eventData additional data to pass to event
  * @private
  */
-CallStats._reportEvent = function (event, eventData) {
+CallStats._reportEvent = function(event, eventData) {
     if (CallStats.initialized) {
         callStats.sendFabricEvent(
             this.peerconnection, event, this.confID, eventData);
     } else {
         CallStats.reportsQueue.push({
-                type: reportType.EVENT,
-                data: {event: event, eventData: eventData}
-            });
+            type: reportType.EVENT,
+            data: { event,
+                eventData }
+        });
         CallStats._checkInitialize();
     }
 };
 
+/* eslint-disable no-invalid-this */
 /**
  * Notifies CallStats for connection setup errors
  */
-CallStats.prototype.sendTerminateEvent = _try_catch(function () {
-    if(!CallStats.initialized) {
+CallStats.prototype.sendTerminateEvent = tryCatch(function() {
+    if (!CallStats.initialized) {
         return;
     }
     callStats.sendFabricEvent(this.peerconnection,
         callStats.fabricEvent.fabricTerminated, this.confID);
 });
 
+/* eslint-enable no-invalid-this */
+
 /**
  * Notifies CallStats for ice connection failed
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.prototype.sendIceConnectionFailedEvent = _try_catch(function (pc, cs){
+CallStats.prototype.sendIceConnectionFailedEvent = tryCatch((pc, cs) => {
     CallStats._reportError.call(
         cs, wrtcFuncNames.iceConnectionFailure, null, pc);
 });
 
+/* eslint-disable no-invalid-this */
 /**
  * Sends the given feedback through CallStats.
  *
@@ -391,9 +351,9 @@ CallStats.prototype.sendIceConnectionFailedEvent = _try_catch(function (pc, cs){
  * user feedback
  * @param detailedFeedback detailed feedback from the user. Not yet used
  */
-CallStats.prototype.sendFeedback = _try_catch(
+CallStats.prototype.sendFeedback = tryCatch(
 function(overallFeedback, detailedFeedback) {
-    if(!CallStats.feedbackEnabled) {
+    if (!CallStats.feedbackEnabled) {
         return;
     }
 
@@ -404,6 +364,8 @@ function(overallFeedback, detailedFeedback) {
     });
 });
 
+/* eslint-enable no-invalid-this */
+
 /**
  * Reports an error to callstats.
  *
@@ -412,20 +374,27 @@ function(overallFeedback, detailedFeedback) {
  * @param pc the peerconnection
  * @private
  */
-CallStats._reportError = function (type, e, pc) {
-    if(!e) {
-        logger.warn("No error is passed!");
-        e = new Error("Unknown error");
+CallStats._reportError = function(type, e, pc) {
+    let error = e;
+
+    if (!error) {
+        logger.warn('No error is passed!');
+        error = new Error('Unknown error');
     }
     if (CallStats.initialized) {
-        callStats.reportError(pc, this.confID, type, e);
+        callStats.reportError(pc, this.confID, type, error);
     } else {
         CallStats.reportsQueue.push({
             type: reportType.ERROR,
-            data: { type: type, error: e, pc: pc}
+            data: {
+                error,
+                pc,
+                type
+            }
         });
         CallStats._checkInitialize();
     }
+
     // else just ignore it
 };
 
@@ -435,7 +404,7 @@ CallStats._reportError = function (type, e, pc) {
  * @param {Error} e error to send
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendGetUserMediaFailed = _try_catch(function (e, cs) {
+CallStats.sendGetUserMediaFailed = tryCatch((e, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.getUserMedia, e, null);
 });
 
@@ -446,7 +415,7 @@ CallStats.sendGetUserMediaFailed = _try_catch(function (e, cs) {
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendCreateOfferFailed = _try_catch(function (e, pc, cs) {
+CallStats.sendCreateOfferFailed = tryCatch((e, pc, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.createOffer, e, pc);
 });
 
@@ -457,7 +426,7 @@ CallStats.sendCreateOfferFailed = _try_catch(function (e, pc, cs) {
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendCreateAnswerFailed = _try_catch(function (e, pc, cs) {
+CallStats.sendCreateAnswerFailed = tryCatch((e, pc, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.createAnswer, e, pc);
 });
 
@@ -468,7 +437,7 @@ CallStats.sendCreateAnswerFailed = _try_catch(function (e, pc, cs) {
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendSetLocalDescFailed = _try_catch(function (e, pc, cs) {
+CallStats.sendSetLocalDescFailed = tryCatch((e, pc, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.setLocalDescription, e, pc);
 });
 
@@ -479,7 +448,7 @@ CallStats.sendSetLocalDescFailed = _try_catch(function (e, pc, cs) {
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendSetRemoteDescFailed = _try_catch(function (e, pc, cs) {
+CallStats.sendSetRemoteDescFailed = tryCatch((e, pc, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.setRemoteDescription, e, pc);
 });
 
@@ -490,7 +459,7 @@ CallStats.sendSetRemoteDescFailed = _try_catch(function (e, pc, cs) {
  * @param {RTCPeerConnection} pc connection on which failure occured.
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendAddIceCandidateFailed = _try_catch(function (e, pc, cs) {
+CallStats.sendAddIceCandidateFailed = tryCatch((e, pc, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.addIceCandidate, e, pc);
 });
 
@@ -500,14 +469,14 @@ CallStats.sendAddIceCandidateFailed = _try_catch(function (e, pc, cs) {
  * @param {Error} e error to send or {String} message
  * @param {CallStats} cs callstats instance related to the error (optional)
  */
-CallStats.sendApplicationLog = _try_catch(function (e, cs) {
+CallStats.sendApplicationLog = tryCatch((e, cs) => {
     CallStats._reportError.call(cs, wrtcFuncNames.applicationLog, e, null);
 });
 
 /**
  * Clears allocated resources.
  */
-CallStats.dispose = function () {
+CallStats.dispose = function() {
     // The next line is commented because we need to be able to send feedback
     // even after the conference has been destroyed.
     // callStats = null;
@@ -515,5 +484,81 @@ CallStats.dispose = function () {
     CallStats.initializeFailed = false;
     CallStats.initializeInProgress = false;
 };
+
+/* eslint-disable no-invalid-this */
+
+/**
+ *
+ * @param err
+ * @param msg
+ */
+function initCallback(err, msg) {
+    logger.log(`CallStats Status: err=${err} msg=${msg}`);
+
+    CallStats.initializeInProgress = false;
+
+    // there is no lib, nothing to report to
+    if (err !== 'success') {
+        CallStats.initializeFailed = true;
+
+        return;
+    }
+
+    const ret = callStats.addNewFabric(this.peerconnection,
+        DEFAULT_REMOTE_USER,
+        callStats.fabricUsage.multiplex,
+        this.confID,
+        this.pcCallback.bind(this));
+
+    const fabricInitialized = ret.status === 'success';
+
+    if (!fabricInitialized) {
+        CallStats.initializeFailed = true;
+        logger.log('callstats fabric not initilized', ret.message);
+
+        return;
+    }
+
+    CallStats.initializeFailed = false;
+    CallStats.initialized = true;
+    CallStats.feedbackEnabled = true;
+
+    // notify callstats about failures if there were any
+    if (CallStats.reportsQueue.length) {
+        CallStats.reportsQueue.forEach(function(report) {
+            if (report.type === reportType.ERROR) {
+                const error = report.data;
+
+                CallStats._reportError.call(this, error.type, error.error,
+                    error.pc);
+            } else if (report.type === reportType.EVENT
+                && fabricInitialized) {
+                // if we have and event to report and we failed to add fabric
+                // this event will not be reported anyway, returning an error
+                const eventData = report.data;
+
+                callStats.sendFabricEvent(
+                    this.peerconnection,
+                    eventData.event,
+                    this.confID,
+                    eventData.eventData);
+            } else if (report.type === reportType.MST_WITH_USERID) {
+                const data = report.data;
+
+                callStats.associateMstWithUserID(
+                    this.peerconnection,
+                    data.callStatsId,
+                    this.confID,
+                    data.ssrc,
+                    data.usageLabel,
+                    data.containerId
+                );
+            }
+        }, this);
+        CallStats.reportsQueue.length = 0;
+    }
+}
+
+/* eslint-enable no-invalid-this */
 
 module.exports = CallStats;

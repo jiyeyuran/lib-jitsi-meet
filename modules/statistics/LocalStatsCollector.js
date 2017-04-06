@@ -2,25 +2,25 @@
  * Provides statistics for the local stream.
  */
 
-var RTCBrowserType = require('../RTC/RTCBrowserType');
+const RTCBrowserType = require('../RTC/RTCBrowserType');
 
 /**
  * Size of the webaudio analyzer buffer.
  * @type {number}
  */
-var WEBAUDIO_ANALYZER_FFT_SIZE = 2048;
+const WEBAUDIO_ANALYZER_FFT_SIZE = 2048;
 
 /**
  * Value of the webaudio analyzer smoothing time parameter.
  * @type {number}
  */
-var WEBAUDIO_ANALYZER_SMOOTING_TIME = 0.8;
+const WEBAUDIO_ANALYZER_SMOOTING_TIME = 0.8;
 
 window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
-var context = null;
+let context = null;
 
-if(window.AudioContext) {
+if (window.AudioContext) {
     context = new AudioContext();
 
     // XXX Not all browsers define a suspend method on AudioContext. As the
@@ -41,13 +41,14 @@ if(window.AudioContext) {
  */
 function timeDomainDataToAudioLevel(samples) {
 
-    var maxVolume = 0;
+    let maxVolume = 0;
 
-    var length = samples.length;
+    const length = samples.length;
 
-    for (var i = 0; i < length; i++) {
-        if (maxVolume < samples[i])
+    for (let i = 0; i < length; i++) {
+        if (maxVolume < samples[i]) {
             maxVolume = samples[i];
+        }
     }
 
     return parseFloat(((maxVolume - 127) / 128).toFixed(3));
@@ -60,15 +61,14 @@ function timeDomainDataToAudioLevel(samples) {
  * @returns {Number} the audio level to be set
  */
 function animateLevel(newLevel, lastLevel) {
-    var value = 0;
-    var diff = lastLevel - newLevel;
-    if(diff > 0.2) {
+    let value = 0;
+    const diff = lastLevel - newLevel;
+
+    if (diff > 0.2) {
         value = lastLevel - 0.2;
-    }
-    else if(diff < -0.4) {
+    } else if (diff < -0.4) {
         value = lastLevel + 0.4;
-    }
-    else {
+    } else {
         value = newLevel;
     }
 
@@ -95,27 +95,32 @@ function LocalStatsCollector(stream, interval, callback) {
 /**
  * Starts the collecting the statistics.
  */
-LocalStatsCollector.prototype.start = function () {
-    if (!context ||
-        RTCBrowserType.isTemasysPluginUsed())
+LocalStatsCollector.prototype.start = function() {
+    if (!context
+        || RTCBrowserType.isTemasysPluginUsed()) {
         return;
+    }
     context.resume();
-    var analyser = context.createAnalyser();
+    const analyser = context.createAnalyser();
+
     analyser.smoothingTimeConstant = WEBAUDIO_ANALYZER_SMOOTING_TIME;
     analyser.fftSize = WEBAUDIO_ANALYZER_FFT_SIZE;
 
-    var source = context.createMediaStreamSource(this.stream);
+    const source = context.createMediaStreamSource(this.stream);
+
     source.connect(analyser);
 
 
-    var self = this;
+    const self = this;
 
     this.intervalId = setInterval(
-        function () {
-            var array = new Uint8Array(analyser.frequencyBinCount);
+        () => {
+            const array = new Uint8Array(analyser.frequencyBinCount);
+
             analyser.getByteTimeDomainData(array);
-            var audioLevel = timeDomainDataToAudioLevel(array);
-            if (audioLevel != self.audioLevel) {
+            const audioLevel = timeDomainDataToAudioLevel(array);
+
+            if (audioLevel !== self.audioLevel) {
                 self.audioLevel = animateLevel(audioLevel, self.audioLevel);
                 self.callback(self.audioLevel);
             }
@@ -127,7 +132,7 @@ LocalStatsCollector.prototype.start = function () {
 /**
  * Stops collecting the statistics.
  */
-LocalStatsCollector.prototype.stop = function () {
+LocalStatsCollector.prototype.stop = function() {
     if (this.intervalId) {
         clearInterval(this.intervalId);
         this.intervalId = null;

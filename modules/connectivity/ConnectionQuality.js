@@ -1,13 +1,12 @@
 import * as ConnectionQualityEvents
-    from "../../service/connectivity/ConnectionQualityEvents";
-import * as ConferenceEvents from "../../JitsiConferenceEvents";
-import {getLogger} from "jitsi-meet-logger";
-import RTCBrowserType from "../RTC/RTCBrowserType";
+    from '../../service/connectivity/ConnectionQualityEvents';
+import * as ConferenceEvents from '../../JitsiConferenceEvents';
+import { getLogger } from 'jitsi-meet-logger';
+import RTCBrowserType from '../RTC/RTCBrowserType';
 
-var XMPPEvents = require('../../service/xmpp/XMPPEvents');
-var MediaType = require('../../service/RTC/MediaType');
-var VideoType = require('../../service/RTC/VideoType');
-var Resolutions = require("../../service/RTC/Resolutions");
+const XMPPEvents = require('../../service/xmpp/XMPPEvents');
+const VideoType = require('../../service/RTC/VideoType');
+const Resolutions = require('../../service/RTC/Resolutions');
 
 const logger = getLogger(__filename);
 
@@ -15,24 +14,54 @@ const logger = getLogger(__filename);
  * The value to use for the "type" field for messages sent by ConnectionQuality
  * over the data channel.
  */
-const STATS_MESSAGE_TYPE = "stats";
+const STATS_MESSAGE_TYPE = 'stats';
 
 /**
  * See media/engine/simulcast.ss from webrtc.org
  */
 const kSimulcastFormats = [
-    { width: 1920, height: 1080, layers:3, max: 5000, target: 4000, min: 800 },
-    { width: 1280, height: 720,  layers:3, max: 2500, target: 2500, min: 600 },
-    { width: 960,  height: 540,  layers:3, max: 900,  target: 900, min: 450 },
-    { width: 640,  height: 360,  layers:2, max: 700,  target: 500, min: 150 },
-    { width: 480,  height: 270,  layers:2, max: 450,  target: 350, min: 150 },
-    { width: 320,  height: 180,  layers:1, max: 200,  target: 150, min: 30 }
+    { width: 1920,
+        height: 1080,
+        layers: 3,
+        max: 5000,
+        target: 4000,
+        min: 800 },
+    { width: 1280,
+        height: 720,
+        layers: 3,
+        max: 2500,
+        target: 2500,
+        min: 600 },
+    { width: 960,
+        height: 540,
+        layers: 3,
+        max: 900,
+        target: 900,
+        min: 450 },
+    { width: 640,
+        height: 360,
+        layers: 2,
+        max: 700,
+        target: 500,
+        min: 150 },
+    { width: 480,
+        height: 270,
+        layers: 2,
+        max: 450,
+        target: 350,
+        min: 150 },
+    { width: 320,
+        height: 180,
+        layers: 1,
+        max: 200,
+        target: 150,
+        min: 30 }
 ];
 
 /**
  * The initial bitrate for video in kbps.
  */
-var startBitrate = 800;
+let startBitrate = 800;
 
 /**
  * Gets the expected bitrate (in kbps) in perfect network conditions.
@@ -55,12 +84,15 @@ function getTarget(simulcast, resolution, millisSinceStart) {
     if (simulcast) {
         // Find the first format with height no bigger than ours.
         let simulcastFormat = kSimulcastFormats.find(f => f.height <= height);
+
         if (simulcastFormat) {
             // Sum the target fields from all simulcast layers for the given
             // resolution (e.g. 720p + 360p + 180p).
-            for (height = simulcastFormat.height; height >= 180; height /=2) {
+            for (height = simulcastFormat.height; height >= 180; height /= 2) {
+                const targetHeight = height;
+
                 simulcastFormat
-                    = kSimulcastFormats.find(f => f.height == height);
+                    = kSimulcastFormats.find(f => f.height === targetHeight);
                 if (simulcastFormat) {
                     target += simulcastFormat.target;
                 } else {
@@ -71,11 +103,12 @@ function getTarget(simulcast, resolution, millisSinceStart) {
     } else {
         // See GetMaxDefaultVideoBitrateKbps in
         // media/engine/webrtcvideoengine2.cc from webrtc.org
-        let pixels = resolution.width * resolution.height;
+        const pixels = resolution.width * resolution.height;
+
         if (pixels <= 320 * 240) {
             target = 600;
         } else if (pixels <= 640 * 480) {
-            target =  1700;
+            target = 1700;
         } else if (pixels <= 960 * 540) {
             target = 2000;
         } else {
@@ -98,6 +131,7 @@ function rampUp(millisSinceStart) {
     if (millisSinceStart > 60000) {
         return Number.MAX_SAFE_INTEGER;
     }
+
     // According to GCC the send side bandwidth estimation grows with at most
     // 8% per second.
     // https://tools.ietf.org/html/draft-ietf-rmcat-gcc-02#section-5.5
@@ -111,6 +145,12 @@ function rampUp(millisSinceStart) {
  * value of 0% indicates a poor connection.
  */
 export default class ConnectionQuality {
+    /**
+     *
+     * @param conference
+     * @param eventEmitter
+     * @param options
+     */
     constructor(conference, eventEmitter, options) {
         this.eventEmitter = eventEmitter;
 
@@ -129,7 +169,7 @@ export default class ConnectionQuality {
         /**
          * Holds statistics about the local connection quality.
          */
-        this._localStats = {connectionQuality: 100};
+        this._localStats = { connectionQuality: 100 };
 
         /**
          * The time this._localStats.connectionQuality was last updated.
@@ -174,8 +214,8 @@ export default class ConnectionQuality {
 
         conference.room.addListener(
             XMPPEvents.ICE_CONNECTION_STATE_CHANGED,
-            (newState) => {
-                if (newState === 'connected') {
+            (jingleSession, newState) => {
+                if (!jingleSession.isP2P && newState === 'connected') {
                     this._timeIceConnected = window.performance.now();
                 }
             });
@@ -189,7 +229,7 @@ export default class ConnectionQuality {
                     this._updateRemoteStats(
                         participant.getId(), payload.values);
                 }
-        });
+            });
 
         // Listen to local statistics events originating from the RTC module
         // and update the _localStats field.
@@ -207,7 +247,7 @@ export default class ConnectionQuality {
         // Save the last time we were unmuted.
         conference.on(
             ConferenceEvents.TRACK_MUTE_CHANGED,
-            (track) => {
+            track => {
                 if (track.isVideoTrack()) {
                     if (track.isMuted()) {
                         this._timeVideoUnmuted = -1;
@@ -218,9 +258,8 @@ export default class ConnectionQuality {
             });
         conference.on(
             ConferenceEvents.TRACK_ADDED,
-            (track) => {
-                if (track.isVideoTrack() && !track.isMuted())
-                {
+            track => {
+                if (track.isVideoTrack() && !track.isMuted()) {
                     this._maybeUpdateUnmuteTime();
                 }
             });
@@ -249,11 +288,13 @@ export default class ConnectionQuality {
 
         // resolutionName is an index into Resolutions (where "720" is
         // "1280x720" and "960" is "960x720" ...).
-        let resolution = Resolutions[resolutionName];
+        const resolution = Resolutions[resolutionName];
 
         let quality = 100;
         let packetLoss;
+
         // TODO: take into account packet loss for received streams
+
         if (this._localStats.packetLoss) {
             packetLoss = this._localStats.packetLoss.upload;
 
@@ -282,8 +323,8 @@ export default class ConnectionQuality {
 
             // Calculate a value based on packet loss only.
             if (packetLoss === undefined) {
-                logger.error("Cannot calculate connection quality, unknown "
-                    + "packet loss.");
+                logger.error('Cannot calculate connection quality, unknown '
+                    + 'packet loss.');
                 quality = 100;
             } else if (packetLoss <= 2) {
                 quality = 100; // Full 5 bars.
@@ -302,12 +343,13 @@ export default class ConnectionQuality {
             // Calculate a value based on the sending bitrate.
 
             // time since sending of video was enabled.
-            let millisSinceStart = window.performance.now()
+            const millisSinceStart = window.performance.now()
                     - Math.max(this._timeVideoUnmuted, this._timeIceConnected);
 
             // expected sending bitrate in perfect conditions
             let target
                 = getTarget(this._simulcast, resolution, millisSinceStart);
+
             target = 0.9 * target;
 
             quality = 100 * this._localStats.bitrate.upload / target;
@@ -319,16 +361,18 @@ export default class ConnectionQuality {
         }
 
         // Make sure that the quality doesn't climb quickly
-        if (this._lastConnectionQualityUpdate > 0)
-        {
-            let maxIncreasePerSecond = 2;
-            let prevConnectionQuality = this._localStats.connectionQuality;
-            let diffSeconds
-                = (window.performance.now()
-                    - this._lastConnectionQualityUpdate) / 1000;
-            quality = Math.min(
-                quality,
-                prevConnectionQuality + diffSeconds * maxIncreasePerSecond);
+        if (this._lastConnectionQualityUpdate > 0) {
+            const maxIncreasePerSecond = 2;
+            const prevConnectionQuality = this._localStats.connectionQuality;
+            const diffSeconds
+                = (window.performance.now() - this._lastConnectionQualityUpdate)
+                    / 1000;
+
+            quality
+                = Math.min(
+                    quality,
+                    prevConnectionQuality
+                        + (diffSeconds * maxIncreasePerSecond));
         }
 
         return Math.min(100, quality);
@@ -349,7 +393,7 @@ export default class ConnectionQuality {
      */
     _broadcastLocalStats() {
         // Send only the data that remote participants care about.
-        let data = {
+        const data = {
             bitrate: this._localStats.bitrate,
             packetLoss: this._localStats.packetLoss,
             connectionQuality: this._localStats.connectionQuality
@@ -358,9 +402,9 @@ export default class ConnectionQuality {
         // TODO: It looks like the remote participants don't really "care"
         // about the resolution, and they look at their local rendered
         // resolution instead. Consider removing this.
-        let localVideoTrack
-            = this._conference.getLocalTracks(MediaType.VIDEO)
-                .find(track => track.isVideoTrack());
+        const localVideoTrack
+            = this._conference.getLocalVideoTrack();
+
         if (localVideoTrack && localVideoTrack.resolution) {
             data.resolution = localVideoTrack.resolution;
         }
@@ -375,9 +419,9 @@ export default class ConnectionQuality {
             // send the statistics again after a few seconds, and the error is
             // already logged elsewhere. So just ignore it.
 
-            //let errorMsg = "Failed to broadcast local stats";
-            //logger.error(errorMsg, e);
-            //GlobalOnErrorHandler.callErrorHandler(
+            // let errorMsg = "Failed to broadcast local stats";
+            // logger.error(errorMsg, e);
+            // GlobalOnErrorHandler.callErrorHandler(
             //    new Error(errorMsg + ": " + e));
         }
     }
@@ -388,14 +432,14 @@ export default class ConnectionQuality {
      */
     _updateLocalStats(data) {
         let key;
-        let updateLocalConnectionQuality
+        const updateLocalConnectionQuality
             = !this._conference.isConnectionInterrupted();
-        let localVideoTrack =
-                this._conference.getLocalTracks(MediaType.VIDEO)
-                    .find(track => track.isVideoTrack());
-        let videoType = localVideoTrack ? localVideoTrack.videoType : undefined;
-        let isMuted = localVideoTrack ? localVideoTrack.isMuted() : true;
-        let resolution = localVideoTrack ? localVideoTrack.resolution : null;
+        const localVideoTrack
+            = this._conference.getLocalVideoTrack();
+        const videoType
+            = localVideoTrack ? localVideoTrack.videoType : undefined;
+        const isMuted = localVideoTrack ? localVideoTrack.isMuted() : true;
+        const resolution = localVideoTrack ? localVideoTrack.resolution : null;
 
         if (!isMuted) {
             this._maybeUpdateUnmuteTime();
@@ -430,13 +474,13 @@ export default class ConnectionQuality {
      */
     _updateRemoteStats(id, data) {
             // Use only the fields we need
-            this._remoteStats[id] = {
-                bitrate: data.bitrate,
-                packetLoss: data.packetLoss,
-                connectionQuality: data.connectionQuality
-            };
+        this._remoteStats[id] = {
+            bitrate: data.bitrate,
+            packetLoss: data.packetLoss,
+            connectionQuality: data.connectionQuality
+        };
 
-            this.eventEmitter.emit(
+        this.eventEmitter.emit(
                 ConnectionQualityEvents.REMOTE_STATS_UPDATED,
                 id,
                 this._remoteStats[id]);

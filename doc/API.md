@@ -109,8 +109,7 @@ JitsiMeetJS.setLogLevel(JitsiMeetJS.logLevels.ERROR);
         - MESSAGE_RECEIVED - new text message received. (parameters - id(string), text(string), ts(number))
         - DISPLAY_NAME_CHANGED - user has changed his display name. (parameters - id(string), displayName(string))
         - SUBJECT_CHANGED - notifies that subject of the conference has changed (parameters - subject(string))
-        - LAST_N_ENDPOINTS_CHANGED - last n set was changed (parameters - array of ids of users)
-        - IN_LAST_N_CHANGED - passes boolean property that shows whether the local user is included in last n set of any other user or not. (parameters - boolean)
+        - LAST_N_ENDPOINTS_CHANGED - last n set was changed (parameters - leavingEndpointIds(array) ids of users leaving lastN, enteringEndpointIds(array) ids of users entering lastN)
         - CONFERENCE_JOINED - notifies the local user that he joined the conference successfully. (no parameters)
         - CONFERENCE_LEFT - notifies the local user that he left the conference successfully. (no parameters)
         - DTMF_SUPPORT_CHANGED - notifies if at least one user supports DTMF. (parameters - supports(boolean))
@@ -224,6 +223,7 @@ This objects represents the server connection. You can create new ```JitsiConnec
         4. callStatsID - callstats credentials
         5. callStatsSecret - callstats credentials
         6. enableTalkWhileMuted - boolean property. Enables/disables talk while muted detection, by default the value is false/disabled.
+        7. ignoreStartMuted - ignores start muted events coming from jicofo. 
         **NOTE: if 4 and 5 are set the library is going to send events to callstats. Otherwise the callstats integration will be disabled.**
 
 5. addEventListener(event, listener) - Subscribes the passed listener to the event.
