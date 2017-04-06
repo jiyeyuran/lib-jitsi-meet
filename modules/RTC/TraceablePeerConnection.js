@@ -1433,6 +1433,14 @@ TraceablePeerConnection.prototype.setRemoteDescription
         SDPUtil.preferVideoCodec(videoMLine, 'h264');
         description.sdp = transform.write(parsedSdp);
     }
+    
+    if (this.options.preferVideoCodec) {
+        const parsedSdp = transform.parse(description.sdp);
+        const videoMLine = parsedSdp.media.find(m => m.type === 'video');
+
+        SDPUtil.preferVideoCodec(videoMLine, this.options.preferVideoCodec);
+        description.sdp = transform.write(parsedSdp);
+    }
 
     // If the browser uses unified plan, transform to it first
     if (RTCBrowserType.usesUnifiedPlan()) {
