@@ -2,22 +2,23 @@
     RTCPeerConnection, RTCSessionDescription */
 
 import { getLogger } from 'jitsi-meet-logger';
+import transform from 'sdp-transform';
+
 import * as GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import JitsiRemoteTrack from './JitsiRemoteTrack';
 import * as MediaType from '../../service/RTC/MediaType';
 import LocalSdpMunger from './LocalSdpMunger';
 import RTC from './RTC';
-import RTCBrowserType from './RTCBrowserType.js';
+import RTCBrowserType from './RTCBrowserType';
 import RTCEvents from '../../service/RTC/RTCEvents';
-import RtxModifier from '../xmpp/RtxModifier.js';
+import RtxModifier from '../xmpp/RtxModifier';
 
 // FIXME SDP tools should end up in some kind of util module
 import SDP from '../xmpp/SDP';
-import SdpConsistency from '../xmpp/SdpConsistency.js';
+import SdpConsistency from '../xmpp/SdpConsistency';
 import { SdpTransformWrap } from '../xmpp/SdpTransformUtil';
 import SDPUtil from '../xmpp/SDPUtil';
 import * as SignalingEvents from '../../service/RTC/SignalingEvents';
-import transform from 'sdp-transform';
 
 const logger = getLogger(__filename);
 const SIMULCAST_LAYERS = 3;
@@ -48,7 +49,7 @@ const SIMULCAST_LAYERS = 3;
  *
  * @constructor
  */
-function TraceablePeerConnection(
+export default function TraceablePeerConnection(
         rtc,
         id,
         signalingLayer,
@@ -1317,6 +1318,43 @@ TraceablePeerConnection.prototype.createDataChannel = function(label, opts) {
 };
 
 /**
+ * Ensures that the simulcast ssrc-group appears after any other ssrc-groups
+ * in the SDP so that simulcast is properly activated.
+ *
+ * @param {Object} localSdp the WebRTC session description instance for
+ * the local description.
+ * @private
+ */
+TraceablePeerConnection.prototype._ensureSimulcastGroupIsLast
+= function(localSdp) {
+    let sdpStr = localSdp.sdp;
+
+    const videoStartIndex = sdpStr.indexOf('m=video');
+    const simStartIndex = sdpStr.indexOf('a=ssrc-group:SIM', videoStartIndex);
+    let otherStartIndex = sdpStr.lastIndexOf('a=ssrc-group');
+
+    if (simStartIndex === -1
+        || otherStartIndex === -1
+        || otherStartIndex === simStartIndex) {
+        return;
+    }
+
+    const simEndIndex = sdpStr.indexOf('\r\n', simStartIndex);
+    const simStr = sdpStr.substring(simStartIndex, simEndIndex + 2);
+
+    sdpStr = sdpStr.replace(simStr, '');
+    otherStartIndex = sdpStr.lastIndexOf('a=ssrc-group');
+    const otherEndIndex = sdpStr.indexOf('\r\n', otherStartIndex);
+    const sdpHead = sdpStr.slice(0, otherEndIndex);
+    const simStrTrimmed = simStr.trim();
+    const sdpTail = sdpStr.slice(otherEndIndex);
+
+    sdpStr = `${sdpHead}\r\n${simStrTrimmed}${sdpTail}`;
+
+    localSdp.sdp = sdpStr;
+};
+
+/**
  * Will adjust audio and video media direction in the given SDP object to
  * reflect the current status of the {@link mediaTransferActive} flag.
  * @param {Object} localDescription the WebRTC session description instance for
@@ -1372,6 +1410,8 @@ TraceablePeerConnection.prototype.setLocalDescription
 
     this._adjustLocalMediaDirection(localSdp);
 
+    this._ensureSimulcastGroupIsLast(localSdp);
+
     // if we're using unified plan, transform to it first.
     if (RTCBrowserType.usesUnifiedPlan()) {
         localSdp = this.interop.toUnifiedPlan(localSdp);
@@ -1396,7 +1436,7 @@ TraceablePeerConnection.prototype.setLocalDescription
             this.trace('setLocalDescriptionOnFailure', err);
             this.eventEmitter.emit(
                 RTCEvents.SET_LOCAL_DESCRIPTION_FAILED,
-                err, this.peerconnection);
+                err, this);
             failureCallback(err);
         }
     );
@@ -1478,7 +1518,7 @@ TraceablePeerConnection.prototype.setRemoteDescription
             this.eventEmitter.emit(
                 RTCEvents.SET_REMOTE_DESCRIPTION_FAILED,
                 err,
-                this.peerconnection);
+                this);
             failureCallback(err);
         });
 };
@@ -1691,7 +1731,7 @@ TraceablePeerConnection.prototype._createOfferOrAnswer
                 ? RTCEvents.CREATE_OFFER_FAILED
                 : RTCEvents.CREATE_ANSWER_FAILED;
 
-        this.eventEmitter.emit(eventType, err, this.peerconnection);
+        this.eventEmitter.emit(eventType, err, this);
         failureCallback(err);
     };
 
@@ -1870,5 +1910,3 @@ TraceablePeerConnection.prototype.generateNewStreamSSRCInfo = function(track) {
 TraceablePeerConnection.prototype.toString = function() {
     return `TPC[${this.id},p2p:${this.isP2P}]`;
 };
-
-module.exports = TraceablePeerConnection;

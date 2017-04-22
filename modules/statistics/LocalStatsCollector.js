@@ -2,7 +2,7 @@
  * Provides statistics for the local stream.
  */
 
-const RTCBrowserType = require('../RTC/RTCBrowserType');
+import RTCBrowserType from '../RTC/RTCBrowserType';
 
 /**
  * Size of the webaudio analyzer buffer.
@@ -84,7 +84,7 @@ function animateLevel(newLevel, lastLevel) {
  * @param callback function that receives the audio levels.
  * @constructor
  */
-function LocalStatsCollector(stream, interval, callback) {
+export default function LocalStatsCollector(stream, interval, callback) {
     this.stream = stream;
     this.intervalId = null;
     this.intervalMilis = interval;
@@ -96,8 +96,7 @@ function LocalStatsCollector(stream, interval, callback) {
  * Starts the collecting the statistics.
  */
 LocalStatsCollector.prototype.start = function() {
-    if (!context
-        || RTCBrowserType.isTemasysPluginUsed()) {
+    if (!LocalStatsCollector.isLocalStatsSupported()) {
         return;
     }
     context.resume();
@@ -139,4 +138,12 @@ LocalStatsCollector.prototype.stop = function() {
     }
 };
 
-module.exports = LocalStatsCollector;
+/**
+ * Checks if the environment has the necessary conditions to support
+ * collecting stats from local streams.
+ *
+ * @returns {boolean}
+ */
+LocalStatsCollector.isLocalStatsSupported = function() {
+    return Boolean(context && !RTCBrowserType.isTemasysPluginUsed());
+};

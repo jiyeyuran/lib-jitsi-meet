@@ -30,7 +30,7 @@ const logger = getLogger(__filename);
  * @param facingMode the camera facing mode used in getUserMedia call
  * @constructor
  */
-function JitsiLocalTrack(
+export default function JitsiLocalTrack(
         rtcId,
         stream,
         track,
@@ -237,6 +237,8 @@ JitsiLocalTrack.prototype._fireNoDataFromSourceEvent = function() {
  */
 JitsiLocalTrack.prototype._setRealDeviceIdFromDeviceList = function(devices) {
     const track = this.getTrack();
+
+    // FIXME for temasys video track, label refers to id not the actual device
     const device
         = devices.find(
             d => d.kind === `${track.kind}input` && d.label === track.label);
@@ -706,5 +708,3 @@ JitsiLocalTrack.prototype._isReceivingData = function() {
 JitsiLocalTrack.prototype.toString = function() {
     return `LocalTrack[${this.rtcId},${this.getType()}]`;
 };
-
-module.exports = JitsiLocalTrack;

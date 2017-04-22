@@ -283,7 +283,8 @@ export default class JingleSessionPC extends JingleSession {
                     + ` P2P? ${this.isP2P}:\t`,
                 now);
             Statistics.analytics.sendEvent(
-                `ice.${this.peerconnection.iceConnectionState}`,
+                `${this.isP2P ? 'p2p.ice.' : 'ice.'}`
+                    + `${this.peerconnection.iceConnectionState}`,
                 { value: now });
             this.room.eventEmitter.emit(
                 XMPPEvents.ICE_CONNECTION_STATE_CHANGED,
@@ -977,7 +978,7 @@ export default class JingleSessionPC extends JingleSession {
         // Do something with reason and reasonCondition when we start to care
         // this.reasonCondition = reasonCondition;
         // this.reasonText = reasonText;
-        logger.info('Session terminated', this, reasonCondition, reasonText);
+        logger.info(`Session terminated ${this}`, reasonCondition, reasonText);
 
         this.close();
     }
@@ -1812,5 +1813,14 @@ export default class JingleSessionPC extends JingleSession {
                 || (this.peerconnection.connectionState
                     && this.peerconnection.connectionState !== 'closed'))
             && this.peerconnection.close();
+    }
+
+    /**
+     * Converts to string with minor summary.
+     * @return {string}
+     */
+    toString() {
+        return `JingleSessionPC[p2p=${this.isP2P},`
+                    + `initiator=${this.isInitiator},sid=${this.sid}]`;
     }
 }
