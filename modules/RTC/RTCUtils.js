@@ -22,11 +22,15 @@ import * as MediaType from '../../service/RTC/MediaType';
 import Resolutions from '../../service/RTC/Resolutions';
 import RTCBrowserType from './RTCBrowserType';
 import RTCEvents from '../../service/RTC/RTCEvents';
+import ortcRTCPeerConnection from './ortc/RTCPeerConnection';
 import screenObtainer from './ScreenObtainer';
 import SDPUtil from '../xmpp/SDPUtil';
 import VideoType from '../../service/RTC/VideoType';
 
 const logger = getLogger(__filename);
+
+// Disable Edge until fully implemented.
+const ENABLE_EDGE = false;
 
 // XXX Don't require Temasys unless it's to be used because it doesn't run on
 // React Native, for example.
@@ -746,7 +750,7 @@ class RTCUtils extends Listenable {
 
                     return;
                 }
-                this.peerconnection = mozRTCPeerConnection;
+                this.RTCPeerConnectionType = mozRTCPeerConnection;
                 this.getUserMedia
                     = wrapGetUserMedia(
                         navigator.mozGetUserMedia.bind(navigator));
@@ -800,7 +804,7 @@ class RTCUtils extends Listenable {
                     || RTCBrowserType.isElectron()
                     || RTCBrowserType.isReactNative()) {
 
-                this.peerconnection = webkitRTCPeerConnection;
+                this.RTCPeerConnectionType = webkitRTCPeerConnection;
                 const getUserMedia
                     = navigator.webkitGetUserMedia.bind(navigator);
 
@@ -864,19 +868,15 @@ class RTCUtils extends Listenable {
                     };
                 }
             } else if (RTCBrowserType.isEdge()) {
-                // TODO: Remove when EDGE is fully supported. For now ensure
-                // that, if EDGE is detected, it's just unsupported.
-                if (RTCBrowserType.isEdge()) {
+                // Disable until fully implemented.
+                if (!ENABLE_EDGE) {
                     rejectWithWebRTCNotSupported(
-                        'Microsoft EDGE not yet supported', reject);
+                        'Microsoft Edge not yet supported', reject);
 
                     return;
                 }
 
-                // TODO: Uncomment when done. For now use the Edge native
-                // RTCPeerConnection.
-                // this.peerconnection = ortcRTCPeerConnection;
-                this.peerconnection = RTCPeerConnection;
+                this.RTCPeerConnectionType = ortcRTCPeerConnection;
                 this.getUserMedia
                     = wrapGetUserMedia(
                         navigator.mediaDevices.getUserMedia.bind(
@@ -905,7 +905,7 @@ class RTCUtils extends Listenable {
             } else if (RTCBrowserType.isTemasysPluginUsed()) {
                 // Detect IE/Safari
                 const webRTCReadyCb = () => {
-                    this.peerconnection = RTCPeerConnection;
+                    this.RTCPeerConnectionType = RTCPeerConnection;
                     this.getUserMedia = window.getUserMedia;
                     this.enumerateDevices
                         = enumerateDevicesThroughMediaStreamTrack;
