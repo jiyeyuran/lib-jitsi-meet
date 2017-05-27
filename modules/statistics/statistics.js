@@ -11,6 +11,12 @@ const logger = require('jitsi-meet-logger').getLogger(__filename);
 const ScriptUtil = require('../util/ScriptUtil');
 
 /**
+ * Stores all active {@link Statistics} instances.
+ * @type {Set<Statistics>}
+ */
+let _instances;
+
+/**
  * True if callstats API is loaded
  */
 let isCallstatsLoaded = false;
@@ -89,7 +95,12 @@ Statistics.init = function(options) {
  * @param options
  */
 export default function Statistics(xmpp, options) {
-    this.rtpStats = null;
+    /**
+     * {@link RTPStats} mapped by {@link TraceablePeerConnection.id} which
+     * collect RTP statistics for each peerconnection.
+     * @type {Map<string, RTPStats}
+     */
+    this.rtpStatsMap = new Map();
     this.eventEmitter = new EventEmitter();
     this.xmpp = xmpp;
     this.options = options || {};
@@ -124,22 +135,36 @@ Statistics.audioLevelsInterval = 200;
 Statistics.disableThirdPartyRequests = false;
 Statistics.analytics = analytics;
 
-/**
- * Stores all active {@link Statistics} instances.
- * @type {Set<Statistics>}
- */
-Statistics.instances = new Set();
+Object.defineProperty(Statistics, 'instances', {
+    /**
+     * Returns the Set holding all active {@link Statistics} instances. Lazily
+     * initializes the Set to allow any Set polyfills to be applied.
+     * @type {Set<Statistics>}
+     */
+    get() {
+        if (!_instances) {
+            _instances = new Set();
+        }
 
+        return _instances;
+    }
+});
+
+/**
+ * Starts collecting RTP stats for given peerconnection.
+ * @param {TraceablePeerConnection} peerconnection
+ */
 Statistics.prototype.startRemoteStats = function(peerconnection) {
-    this.stopRemoteStats();
+    this.stopRemoteStats(peerconnection);
 
     try {
-        this.rtpStats
+        const rtpStats
             = new RTPStats(peerconnection,
                     Statistics.audioLevelsInterval, 2000, this.eventEmitter);
-        this.rtpStats.start(Statistics.audioLevelsEnabled);
+
+        rtpStats.start(Statistics.audioLevelsEnabled);
+        this.rtpStatsMap.set(peerconnection.id, rtpStats);
     } catch (e) {
-        this.rtpStats = null;
         logger.error(`Failed to start collecting remote statistics: ${e}`);
     }
 };
@@ -214,7 +239,9 @@ Statistics.prototype.dispose = function() {
         for (const callStats of this.callsStatsInstances.values()) {
             this.stopCallStats(callStats.tpc);
         }
-        this.stopRemoteStats();
+        for (const tpcId of this.rtpStatsMap.keys()) {
+            this._stopRemoteStats(tpcId);
+        }
         if (this.eventEmitter) {
             this.eventEmitter.removeAllListeners();
         }
@@ -238,13 +265,26 @@ Statistics.stopLocalStats = function(stream) {
     }
 };
 
-Statistics.prototype.stopRemoteStats = function() {
-    if (!this.rtpStats) {
-        return;
-    }
+/**
+ * Stops remote RTP stats for given peerconnection ID.
+ * @param {string} tpcId {@link TraceablePeerConnection.id}
+ * @private
+ */
+Statistics.prototype._stopRemoteStats = function(tpcId) {
+    const rtpStats = this.rtpStatsMap.get(tpcId);
 
-    this.rtpStats.stop();
-    this.rtpStats = null;
+    if (rtpStats) {
+        rtpStats.stop();
+        this.rtpStatsMap.delete(tpcId);
+    }
+};
+
+/**
+ * Stops collecting RTP stats for given peerconnection
+ * @param {TraceablePeerConnection} tpc
+ */
+Statistics.prototype.stopRemoteStats = function(tpc) {
+    this._stopRemoteStats(tpc.id);
 };
 
 // CALSTATS METHODS

@@ -208,14 +208,41 @@ const RTCBrowserType = {
     },
 
     /**
+     * Checks if the current browser reports upload and download bandwidth
+     * statistics.
+     * @return {boolean}
+     */
+    supportsBandwidthStatistics() {
+        // FIXME bandwidth stats are currently not implemented for FF on our
+        // side, but not sure if not possible ?
+        return !RTCBrowserType.isFirefox();
+    },
+
+    /**
+     * Checks if the current browser reports round trip time statistics for
+     * the ICE candidate pair.
+     * @return {boolean}
+     */
+    supportsRTTStatistics() {
+        // Firefox does not seem to report RTT for ICE candidate pair:
+        // eslint-disable-next-line max-len
+        // https://www.w3.org/TR/webrtc-stats/#dom-rtcicecandidatepairstats-currentroundtriptime
+        // It does report mozRTT for RTP streams, but at the time of this
+        // writing it's value does not make sense most of the time
+        // (is reported as 1):
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1241066
+        // For Chrome and others we rely on 'googRtt'.
+        return !RTCBrowserType.isFirefox();
+    },
+
+    /**
      * Whether jitsi-meet supports simulcast on the current browser.
      * @returns {boolean}
      */
     supportsSimulcast() {
-        // This mirrors what sdp-simulcast uses (which is used when deciding
-        // whether to actually enable simulcast or not).
-        // TODO: the logic should be in one single place.
-        return window.chrome !== undefined;
+        return RTCBrowserType.isChrome()
+            || RTCBrowserType.isElectron()
+            || RTCBrowserType.isNWJS();
     },
 
     supportsRtx() {

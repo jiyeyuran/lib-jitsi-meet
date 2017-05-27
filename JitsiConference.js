@@ -1,5 +1,6 @@
 /* global __filename, Strophe, Promise */
 
+import AvgRTPStatsReporter from './modules/statistics/AvgRTPStatsReporter';
 import ComponentsVersions from './modules/version/ComponentsVersions';
 import ConnectionQuality from './modules/connectivity/ConnectionQuality';
 import { getLogger } from 'jitsi-meet-logger';
@@ -40,6 +41,9 @@ const logger = getLogger(__filename);
  * @param options.name the name of the conference
  * @param options.connection the JitsiConnection object for this
  * JitsiConference.
+ * @param {number} [options.config.avgRtpStatsN=15] how many samples are to be
+ * collected by {@link AvgRTPStatsReporter}, before arithmetic mean is
+ * calculated and submitted to the analytics module.
  * @param {boolean} [options.config.enableP2P] when set to <tt>true</tt>
  * the peer to peer mode will be enabled. It means that when there are only 2
  * participants in the conference an attempt to make direct connection will be
@@ -48,6 +52,9 @@ const logger = getLogger(__filename);
  * @param {number} [options.config.backToP2PDelay=5] a delay given in seconds,
  * before the conference switches back to P2P, after the 3rd participant has
  * left the room.
+ * @param {number} [options.config.channelLastN=-1] The requested amount of
+ * videos are going to be delivered after the value is in effect. Set to -1 for
+ * unlimited or all available videos.
  * @constructor
  *
  * FIXME Make all methods which are called from lib-internal classes
@@ -69,9 +76,9 @@ export default function JitsiConference(options) {
     this.eventEmitter = new EventEmitter();
     this.options = options;
     this.eventManager = new JitsiConferenceEventManager(this);
+    this.participants = {};
     this._init(options);
     this.componentsVersions = new ComponentsVersions(this);
-    this.participants = {};
 
     /**
      * Jingle session instance for the JVB connection.
@@ -107,6 +114,13 @@ export default function JitsiConference(options) {
      */
     this.connectionQuality
         = new ConnectionQuality(this, this.eventEmitter, options);
+
+    /**
+     * Reports average RTP statistics to the analytics module.
+     * @type {AvgRTPStatsReporter}
+     */
+    this.avgRtpStatsReporter
+        = new AvgRTPStatsReporter(this, options.config.avgRtpStatsN || 15);
 
     /**
      * Indicates whether the connection is interrupted or not.
@@ -170,7 +184,7 @@ JitsiConference.prototype.constructor = JitsiConference;
  * @param options.connection {JitsiConnection} overrides this.connection
  */
 JitsiConference.prototype._init = function(options = {}) {
-    // Override connection and xmpp properties (Usefull if the connection
+    // Override connection and xmpp properties (Useful if the connection
     // reloaded)
     if (options.connection) {
         this.connection = options.connection;
@@ -206,8 +220,17 @@ JitsiConference.prototype._init = function(options = {}) {
 
     this.participantConnectionStatus
         = new ParticipantConnectionStatusHandler(
-                this.rtc, this,
-                options.config.peerDisconnectedThroughRtcTimeout);
+            this.rtc,
+            this,
+            {   // Both these options are not public API, leaving it here only
+                // as an entry point through config for tuning up purposes.
+                // Default values should be adjusted as soon as optimal values
+                // are discovered.
+                rtcMuteTimeout:
+                    this.options.config._peerConnStatusRtcMuteTimeout,
+                outOfLastNTimeout:
+                    this.options.config._peerConnStatusOutOfLastNTimeout
+            });
     this.participantConnectionStatus.init();
 
     if (!this.statistics) {
@@ -237,6 +260,10 @@ JitsiConference.prototype._init = function(options = {}) {
             () =>
                 this.eventEmitter.emit(JitsiConferenceEvents.TALK_WHILE_MUTED));
     }
+
+    if ('channelLastN' in options.config) {
+        this.setLastN(options.config.channelLastN);
+    }
 };
 
 /**
@@ -264,6 +291,10 @@ JitsiConference.prototype.leave = function() {
     if (this.participantConnectionStatus) {
         this.participantConnectionStatus.dispose();
         this.participantConnectionStatus = null;
+    }
+    if (this.avgRtpStatsReporter) {
+        this.avgRtpStatsReporter.dispose();
+        this.avgRtpStatsReporter = null;
     }
 
     this.getLocalTracks().forEach(track => this.onLocalTrackRemoved(track));
@@ -580,13 +611,24 @@ JitsiConference.prototype.addTrack = function(track) {
 };
 
 /**
- * Fires TRACK_AUDIO_LEVEL_CHANGED change conference event.
+ * Fires TRACK_AUDIO_LEVEL_CHANGED change conference event (for local tracks).
+ * @param {TraceablePeerConnection|null} tpc
  * @param audioLevel the audio level
  */
-JitsiConference.prototype._fireAudioLevelChangeEvent = function(audioLevel) {
-    this.eventEmitter.emit(
-        JitsiConferenceEvents.TRACK_AUDIO_LEVEL_CHANGED,
-        this.myUserId(), audioLevel);
+JitsiConference.prototype._fireAudioLevelChangeEvent
+= function(tpc, audioLevel) {
+    const activeTpc = this.getActivePeerConnection();
+
+    // There will be no TraceablePeerConnection if audio levels do not come from
+    // a peerconnection. LocalStatsCollector.js measures audio levels using Web
+    // Audio Analyser API and emits local audio levels events through
+    // JitsiTrack.setAudioLevel, but does not provide TPC instance which is
+    // optional.
+    if (tpc === null || activeTpc === tpc) {
+        this.eventEmitter.emit(
+            JitsiConferenceEvents.TRACK_AUDIO_LEVEL_CHANGED,
+            this.myUserId(), audioLevel);
+    }
 };
 
 /**
@@ -917,6 +959,8 @@ JitsiConference.prototype.setLastN = function(lastN) {
  * like to check.
  * @return {boolean} true if the participant with id is in the last N set or
  * if there's no last N set, false otherwise.
+ * @deprecated this method should never be used to figure out the UI, but
+ * {@link ParticipantConnectionStatus} should be used instead.
  */
 JitsiConference.prototype.isInLastN = function(participantId) {
     return this.rtc.isInLastN(participantId);
@@ -1136,11 +1180,15 @@ JitsiConference.prototype.onRemoteTrackAdded = function(track) {
         () => emitter.emit(JitsiConferenceEvents.TRACK_MUTE_CHANGED, track));
     track.addEventListener(
         JitsiTrackEvents.TRACK_AUDIO_LEVEL_CHANGED,
-        audioLevel => {
-            emitter.emit(
-                JitsiConferenceEvents.TRACK_AUDIO_LEVEL_CHANGED,
-                id,
-                audioLevel);
+        (tpc, audioLevel) => {
+            const activeTPC = this.getActivePeerConnection();
+
+            if (activeTPC === tpc) {
+                emitter.emit(
+                    JitsiConferenceEvents.TRACK_AUDIO_LEVEL_CHANGED,
+                    id,
+                    audioLevel);
+            }
         }
     );
 
@@ -1315,7 +1363,7 @@ JitsiConference.prototype.onIncomingCall
         this.statistics.startCallStats(
             this.jvbJingleSession.peerconnection,
             'jitsi' /* Remote user ID for JVB is 'jitsi' */);
-        this._startRemoteStats();
+        this.statistics.startRemoteStats(this.jvbJingleSession.peerconnection);
     } catch (e) {
         GlobalOnErrorHandler.callErrorHandler(e);
         logger.error(e);
@@ -1371,19 +1419,6 @@ JitsiConference.prototype._rejectIncomingCall
 };
 
 /**
- * Method called to start remote stats for the current peer connection (if
- * available).
- * @private
- */
-JitsiConference.prototype._startRemoteStats = function() {
-    const activePeerConnection = this.getActivePeerConnection();
-
-    if (activePeerConnection) {
-        this.statistics.startRemoteStats(activePeerConnection);
-    }
-};
-
-/**
  * Handles the call ended event.
  * @param {JingleSessionPC} jingleSession the jingle session which has been
  * terminated.
@@ -1404,7 +1439,8 @@ JitsiConference.prototype.onCallEnded
 
         // Stop the stats
         if (this.statistics) {
-            this.statistics.stopRemoteStats();
+            this.statistics.stopRemoteStats(
+                this.jvbJingleSession.peerconnection);
             logger.info('Stopping JVB CallStats');
             this.statistics.stopCallStats(
                 this.jvbJingleSession.peerconnection);
@@ -1608,7 +1644,7 @@ JitsiConference.prototype.getPhonePin = function() {
  *
  * @return {TraceablePeerConnection|null} null if there isn't any active
  * <tt>TraceablePeerConnection</tt> currently available.
- * @protected
+ * @public (FIXME how to make package local ?)
  */
 JitsiConference.prototype.getActivePeerConnection = function() {
     if (this.isP2PActive()) {
@@ -1986,7 +2022,7 @@ JitsiConference.prototype._onIceConnectionEstablished
 
     // Start remote stats
     logger.info('Starting remote stats with p2p connection');
-    this._startRemoteStats();
+    this.statistics.startRemoteStats(this.p2pJingleSession.peerconnection);
 
     // Log the P2P established event
     if (this.p2pJingleSession.isInitiator) {
@@ -2261,7 +2297,7 @@ JitsiConference.prototype._stopP2PSession
 
     // Stop P2P stats
     logger.info('Stopping remote stats for P2P connection');
-    this.statistics.stopRemoteStats();
+    this.statistics.stopRemoteStats(this.p2pJingleSession.peerconnection);
     logger.info('Stopping CallStats for P2P connection');
     this.statistics.stopCallStats(
         this.p2pJingleSession.peerconnection);
@@ -2293,12 +2329,6 @@ JitsiConference.prototype._stopP2PSession
         } else {
             logger.info('Not adding remote JVB tracks - no session yet');
         }
-    }
-
-    // Start remote stats
-    logger.info('Starting remote stats with JVB connection');
-    if (this.jvbJingleSession) {
-        this._startRemoteStats();
     }
 };
 

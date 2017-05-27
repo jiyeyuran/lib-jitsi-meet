@@ -85,9 +85,9 @@ function addDeviceTypeToAnalyticsEvent(name, options) {
 }
 
 /**
- * Namespace for the interface of Jitsi Meet Library.
+ * The public API of the Jitsi Meet library (a.k.a. JitsiMeetJS).
  */
-const LibJitsiMeet = {
+export default {
 
     version: '{#COMMIT_HASH#}',
 
@@ -273,7 +273,8 @@ const LibJitsiMeet = {
 
                         if (track.getType() === MediaType.AUDIO) {
                             Statistics.startLocalStats(mStream,
-                                track.setAudioLevel.bind(track));
+                                track.setAudioLevel.bind(
+                                    track, null /* no TPC */));
                             track.addEventListener(
                                 JitsiTrackEvents.LOCAL_TRACK_STOPPED,
                                 () => {
@@ -308,13 +309,14 @@ const LibJitsiMeet = {
                     if (newResolution !== null) {
                         options.resolution = newResolution;
 
-                        logger.debug('Retry createLocalTracks with resolution',
+                        logger.debug(
+                            'Retry createLocalTracks with resolution',
                             newResolution);
 
                         Statistics.analytics.sendEvent(
                             `getUserMedia.fail.resolution.${oldResolution}`);
 
-                        return LibJitsiMeet.createLocalTracks(options);
+                        return this.createLocalTracks(options);
                     }
                 }
 
@@ -453,13 +455,11 @@ const LibJitsiMeet = {
 
     /**
      * Represents a hub/namespace for utility functionality which may be of
-     * interest to LibJitsiMeet clients.
+     * interest to lib-jitsi-meet clients.
      */
     util: {
-        ScriptUtil,
+        AuthUtil,
         RTCUIHelper,
-        AuthUtil
+        ScriptUtil
     }
 };
-
-module.exports = LibJitsiMeet;

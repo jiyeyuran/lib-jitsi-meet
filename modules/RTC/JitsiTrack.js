@@ -253,7 +253,7 @@ JitsiTrack.prototype._maybeFireTrackAttached = function(container) {
  *          library. That's the case when Temasys plugin is in use.
  */
 JitsiTrack.prototype.attach = function(container) {
-    let c;
+    let c = container;
 
     if (this.stream) {
         c = RTCUtils.attachMediaStream(container, this.stream);
@@ -381,13 +381,19 @@ JitsiTrack.prototype.removeEventListener = JitsiTrack.prototype.off;
 
 /**
  * Sets the audio level for the stream
- * @param audioLevel the new audio level
+ * @param {TraceablePeerConnection|null} tpc the peerconnection instance which
+ * is source for the audio level. It can be <tt>null</tt> for a local track if
+ * the audio level was measured outside of the peerconnection
+ * (see /modules/statistics/LocalStatsCollector.js).
+ * @param {number} audioLevel value between 0 and 1
  */
-JitsiTrack.prototype.setAudioLevel = function(audioLevel) {
+JitsiTrack.prototype.setAudioLevel = function(tpc, audioLevel) {
     if (this.audioLevel !== audioLevel) {
-        this.eventEmitter.emit(JitsiTrackEvents.TRACK_AUDIO_LEVEL_CHANGED,
-            audioLevel);
         this.audioLevel = audioLevel;
+        this.eventEmitter.emit(
+            JitsiTrackEvents.TRACK_AUDIO_LEVEL_CHANGED,
+            tpc,
+            audioLevel);
     }
 };
 

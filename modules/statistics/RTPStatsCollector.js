@@ -10,8 +10,8 @@ const browserSupported = RTCBrowserType.isChrome()
         || RTCBrowserType.isNWJS() || RTCBrowserType.isElectron();
 
 /**
- * The LibJitsiMeet browser-agnostic names of the browser-specific keys reported
- * by RTCPeerConnection#getStats mapped by RTCBrowserType.
+ * The lib-jitsi-meet browser-agnostic names of the browser-specific keys
+ * reported by RTCPeerConnection#getStats mapped by RTCBrowserType.
  */
 const KEYS_BY_BROWSER_TYPE = {};
 
@@ -44,7 +44,8 @@ KEYS_BY_BROWSER_TYPE[RTCBrowserType.RTC_BROWSER_CHROME] = {
     'googFrameRateReceived': 'googFrameRateReceived',
     'googFrameRateSent': 'googFrameRateSent',
     'audioInputLevel': 'audioInputLevel',
-    'audioOutputLevel': 'audioOutputLevel'
+    'audioOutputLevel': 'audioOutputLevel',
+    'currentRoundTripTime': 'googRtt'
 };
 KEYS_BY_BROWSER_TYPE[RTCBrowserType.RTC_BROWSER_OPERA]
     = KEYS_BY_BROWSER_TYPE[RTCBrowserType.RTC_BROWSER_CHROME];
@@ -207,8 +208,9 @@ export default function StatsCollector(
 
     /**
      * The function which is to be used to retrieve the value associated in a
-     * report returned by RTCPeerConnection#getStats with a LibJitsiMeet
+     * report returned by RTCPeerConnection#getStats with a lib-jitsi-meet
      * browser-agnostic name/key.
+     *
      * @function
      * @private
      */
@@ -229,8 +231,11 @@ export default function StatsCollector(
     this.statsIntervalId = null;
     this.statsIntervalMilis = statsInterval;
 
-    // Map of ssrcs to SsrcStats
-    this.ssrc2stats = {};
+    /**
+     * Maps SSRC numbers to {@link SsrcStats}.
+     * @type {Map<number,SsrcStats}
+     */
+    this.ssrc2stats = new Map();
 }
 
 /* eslint-enable max-params */
@@ -329,13 +334,13 @@ StatsCollector.prototype.start = function(startAudioLevelStats) {
 /**
  * Defines a function which (1) is to be used as a StatsCollector method and (2)
  * gets the value from a specific report returned by RTCPeerConnection#getStats
- * associated with a LibJitsiMeet browser-agnostic name.
+ * associated with a lib-jitsi-meet browser-agnostic name.
  *
  * @param {Object.<string,string>} keys the map of LibJitsi browser-agnostic
  * names to RTCPeerConnection#getStats browser-specific keys
  */
 StatsCollector.prototype._defineGetStatValueMethod = function(keys) {
-    // Define the function which converts a LibJitsiMeet browser-asnostic name
+    // Define the function which converts a lib-jitsi-meet browser-asnostic name
     // to a browser-specific key of a report returned by
     // RTCPeerConnection#getStats.
     const keyFromName = function(name) {
@@ -395,10 +400,30 @@ StatsCollector.prototype._defineGetStatValueMethod = function(keys) {
 
     // Compose the 2 functions defined above to get a function which retrieves
     // the value from a specific report returned by RTCPeerConnection#getStats
-    // associated with a specific LibJitsiMeet browser-agnostic name.
-    return function(item, name) {
-        return itemStatByKey(item, keyFromName(name));
-    };
+    // associated with a specific lib-jitsi-meet browser-agnostic name.
+    return (item, name) => itemStatByKey(item, keyFromName(name));
+};
+
+/**
+ * Obtains a stat value from given stat and converts it to a non-negative
+ * number. If the value is either invalid or negative then 0 will be returned.
+ * @param report
+ * @param {string} name
+ * @return {number}
+ * @private
+ */
+StatsCollector.prototype.getNonNegativeStat = function(report, name) {
+    let value = this._getStatValue(report, name);
+
+    if (typeof value !== 'number') {
+        value = Number(value);
+    }
+
+    if (isNaN(value)) {
+        return 0;
+    }
+
+    return Math.max(0, value);
 };
 
 /* eslint-disable no-continue */
@@ -412,25 +437,6 @@ StatsCollector.prototype.processStatsReport = function() {
     }
 
     const getStatValue = this._getStatValue;
-
-    /**
-     *
-     * @param report
-     * @param name
-     */
-    function getNonNegativeStat(report, name) {
-        let value = getStatValue(report, name);
-
-        if (typeof value !== 'number') {
-            value = Number(value);
-        }
-
-        if (isNaN(value)) {
-            return 0;
-        }
-
-        return Math.max(0, value);
-    }
     const byteSentStats = {};
 
     for (const idx in this.currentStatsReport) {
@@ -457,13 +463,14 @@ StatsCollector.prototype.processStatsReport = function() {
         } catch (e) { /* not supported*/ }
 
         if (now.type === 'googCandidatePair') {
-            let active, ip, localip, type;
+            let active, ip, localip, rtt, type;
 
             try {
                 ip = getStatValue(now, 'remoteAddress');
                 type = getStatValue(now, 'transportType');
                 localip = getStatValue(now, 'localAddress');
                 active = getStatValue(now, 'activeConnection');
+                rtt = this.getNonNegativeStat(now, 'currentRoundTripTime');
             } catch (e) { /* not supported*/ }
             if (!ip || !type || !localip || active !== 'true') {
                 continue;
@@ -481,7 +488,8 @@ StatsCollector.prototype.processStatsReport = function() {
                     ip,
                     type,
                     localip,
-                    p2p: this.peerconnection.isP2P
+                    p2p: this.peerconnection.isP2P,
+                    rtt
                 });
             }
             continue;
@@ -510,14 +518,29 @@ StatsCollector.prototype.processStatsReport = function() {
         }
 
         const before = this.previousStatsReport[idx];
-        const ssrc = getStatValue(now, 'ssrc');
+        const ssrc = this.getNonNegativeStat(now, 'ssrc');
 
         if (!before || !ssrc) {
             continue;
         }
 
-        const ssrcStats
-          = this.ssrc2stats[ssrc] || (this.ssrc2stats[ssrc] = new SsrcStats());
+        // isRemote is available only in FF and is ignored in case of chrome
+        // according to the spec
+        // https://www.w3.org/TR/webrtc-stats/#dom-rtcrtpstreamstats-isremote
+        // when isRemote is true indicates that the measurements were done at
+        // the remote endpoint and reported in an RTCP RR/XR
+        // Fixes a problem where we are calculating local stats wrong adding
+        // the sent bytes to the local download bitrate
+        if (now.isRemote === true) {
+            continue;
+        }
+
+        let ssrcStats = this.ssrc2stats.get(ssrc);
+
+        if (!ssrcStats) {
+            ssrcStats = new SsrcStats();
+            this.ssrc2stats.set(ssrc, ssrcStats);
+        }
 
         let isDownloadStream = true;
         let key = 'packetsReceived';
@@ -537,11 +560,13 @@ StatsCollector.prototype.processStatsReport = function() {
             packetsNow = 0;
         }
 
-        const packetsBefore = getNonNegativeStat(before, key);
+        const packetsBefore = this.getNonNegativeStat(before, key);
         const packetsDiff = Math.max(0, packetsNow - packetsBefore);
 
-        const packetsLostNow = getNonNegativeStat(now, 'packetsLost');
-        const packetsLostBefore = getNonNegativeStat(before, 'packetsLost');
+        const packetsLostNow
+            = this.getNonNegativeStat(now, 'packetsLost');
+        const packetsLostBefore
+            = this.getNonNegativeStat(before, 'packetsLost');
         const packetsLostDiff = Math.max(0, packetsLostNow - packetsLostBefore);
 
         ssrcStats.setLoss({
@@ -550,8 +575,10 @@ StatsCollector.prototype.processStatsReport = function() {
             isDownloadStream
         });
 
-        const bytesReceivedNow = getNonNegativeStat(now, 'bytesReceived');
-        const bytesReceivedBefore = getNonNegativeStat(before, 'bytesReceived');
+        const bytesReceivedNow
+            = this.getNonNegativeStat(now, 'bytesReceived');
+        const bytesReceivedBefore
+            = this.getNonNegativeStat(before, 'bytesReceived');
         const bytesReceived
             = Math.max(0, bytesReceivedNow - bytesReceivedBefore);
 
@@ -615,7 +642,7 @@ StatsCollector.prototype.processStatsReport = function() {
             // let's try with another one (FF)
             try {
                 ssrcStats.setFramerate(Math.round(
-                    getNonNegativeStat(now, 'framerateMean')));
+                    this.getNonNegativeStat(now, 'framerateMean')));
             } catch (err) { /* not supported*/ }
         }
 
@@ -639,39 +666,92 @@ StatsCollector.prototype.processStatsReport = function() {
     let bitrateUpload = 0;
     const resolutions = {};
     const framerates = {};
+    let audioBitrateDownload = 0;
+    let audioBitrateUpload = 0;
+    let videoBitrateDownload = 0;
+    let videoBitrateUpload = 0;
 
-    Object.keys(this.ssrc2stats).forEach(
-        function(ssrc) {
-            const ssrcStats = this.ssrc2stats[ssrc];
+    for (const [ ssrc, ssrcStats ] of this.ssrc2stats) {
+        // process packet loss stats
+        const loss = ssrcStats.loss;
+        const type = loss.isDownloadStream ? 'download' : 'upload';
 
-            // process packet loss stats
-            const loss = ssrcStats.loss;
-            const type = loss.isDownloadStream ? 'download' : 'upload';
+        totalPackets[type] += loss.packetsTotal;
+        lostPackets[type] += loss.packetsLost;
 
-            totalPackets[type] += loss.packetsTotal;
-            lostPackets[type] += loss.packetsLost;
+        // process bitrate stats
+        bitrateDownload += ssrcStats.bitrate.download;
+        bitrateUpload += ssrcStats.bitrate.upload;
 
-            // process bitrate stats
-            bitrateDownload += ssrcStats.bitrate.download;
-            bitrateUpload += ssrcStats.bitrate.upload;
+        // collect resolutions and framerates
+        const track = this.peerconnection.getTrackBySSRC(ssrc);
 
-            ssrcStats.resetBitrate();
+        if (track) {
+            if (track.isAudioTrack()) {
+                audioBitrateDownload += ssrcStats.bitrate.download;
+                audioBitrateUpload += ssrcStats.bitrate.upload;
+            } else {
+                videoBitrateDownload += ssrcStats.bitrate.download;
+                videoBitrateUpload += ssrcStats.bitrate.upload;
+            }
 
-            // collect resolutions
-            resolutions[ssrc] = ssrcStats.resolution;
+            const participantId = track.getParticipantId();
 
-            // collect framerates
-            framerates[ssrc] = ssrcStats.framerate;
-        },
-        this
-    );
+            if (participantId) {
+                const resolution = ssrcStats.resolution;
+
+                if (resolution.width
+                        && resolution.height
+                        && resolution.width !== -1
+                        && resolution.height !== -1) {
+                    const userResolutions = resolutions[participantId] || {};
+
+                    userResolutions[ssrc] = resolution;
+                    resolutions[participantId] = userResolutions;
+                }
+                if (ssrcStats.framerate !== 0) {
+                    const userFramerates = framerates[participantId] || {};
+
+                    userFramerates[ssrc] = ssrcStats.framerate;
+                    framerates[participantId] = userFramerates;
+                }
+            } else {
+                logger.error(`No participant ID returned by ${track}`);
+            }
+        } else if (this.peerconnection.isP2P) {
+            // NOTE For JVB connection there are JVB tracks reported in
+            // the stats, but they do not have corresponding JitsiRemoteTrack
+            // instances stored in TPC. It is not trivial to figure out that
+            // a SSRC belongs to JVB, so we print this error ony for the P2P
+            // connection for the time being.
+            //
+            // Also there will be reports for tracks removed from the session,
+            // for the users who have left the conference.
+            logger.error(
+                `JitsiTrack not found for SSRC ${ssrc}`
+                    + ` in ${this.peerconnection}`);
+        }
+
+        ssrcStats.resetBitrate();
+    }
 
     this.eventEmitter.emit(
         StatisticsEvents.BYTE_SENT_STATS, this.peerconnection, byteSentStats);
 
-    this.conferenceStats.bitrate
-      = { 'upload': bitrateUpload,
-          'download': bitrateDownload };
+    this.conferenceStats.bitrate = {
+        'upload': bitrateUpload,
+        'download': bitrateDownload
+    };
+
+    this.conferenceStats.bitrate.audio = {
+        'upload': audioBitrateUpload,
+        'download': audioBitrateDownload
+    };
+
+    this.conferenceStats.bitrate.video = {
+        'upload': videoBitrateUpload,
+        'download': videoBitrateDownload
+    };
 
     this.conferenceStats.packetLoss = {
         total:
@@ -682,14 +762,17 @@ StatsCollector.prototype.processStatsReport = function() {
         upload:
             calculatePacketLoss(lostPackets.upload, totalPackets.upload)
     };
-    this.eventEmitter.emit(StatisticsEvents.CONNECTION_STATS, {
-        'bandwidth': this.conferenceStats.bandwidth,
-        'bitrate': this.conferenceStats.bitrate,
-        'packetLoss': this.conferenceStats.packetLoss,
-        'resolution': resolutions,
-        'framerate': framerates,
-        'transport': this.conferenceStats.transport
-    });
+    this.eventEmitter.emit(
+        StatisticsEvents.CONNECTION_STATS,
+        this.peerconnection,
+        {
+            'bandwidth': this.conferenceStats.bandwidth,
+            'bitrate': this.conferenceStats.bitrate,
+            'packetLoss': this.conferenceStats.packetLoss,
+            'resolution': resolutions,
+            'framerate': framerates,
+            'transport': this.conferenceStats.transport
+        });
     this.conferenceStats.transport = [];
 };
 
@@ -715,7 +798,7 @@ StatsCollector.prototype.processAudioLevelReport = function() {
         }
 
         const before = this.baselineAudioLevelsReport[idx];
-        const ssrc = getStatValue(now, 'ssrc');
+        const ssrc = this.getNonNegativeStat(now, 'ssrc');
 
         if (!before) {
             logger.warn(`${ssrc} not enough data`);
@@ -750,7 +833,11 @@ StatsCollector.prototype.processAudioLevelReport = function() {
             // seems to vary between 0 and around 32k.
             audioLevel = audioLevel / 32767;
             this.eventEmitter.emit(
-                StatisticsEvents.AUDIO_LEVEL, ssrc, audioLevel, isLocal);
+                StatisticsEvents.AUDIO_LEVEL,
+                this.peerconnection,
+                ssrc,
+                audioLevel,
+                isLocal);
         }
     }
 };

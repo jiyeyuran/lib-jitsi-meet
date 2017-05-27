@@ -2,7 +2,6 @@ import * as ConnectionQualityEvents
     from '../../service/connectivity/ConnectionQualityEvents';
 import * as ConferenceEvents from '../../JitsiConferenceEvents';
 import { getLogger } from 'jitsi-meet-logger';
-import RTCBrowserType from '../RTC/RTCBrowserType';
 
 const XMPPEvents = require('../../service/xmpp/XMPPEvents');
 const VideoType = require('../../service/RTC/VideoType');
@@ -160,16 +159,12 @@ export default class ConnectionQuality {
         this._conference = conference;
 
         /**
-         * Whether simulcast is supported. Note that even if supported, it is
-         * currently not used for screensharing.
-         */
-        this._simulcast
-            = !options.disableSimulcast && RTCBrowserType.supportsSimulcast();
-
-        /**
          * Holds statistics about the local connection quality.
          */
-        this._localStats = { connectionQuality: 100 };
+        this._localStats = {
+            connectionQuality: 100,
+            jvbRTT: undefined
+        };
 
         /**
          * The time this._localStats.connectionQuality was last updated.
@@ -240,8 +235,7 @@ export default class ConnectionQuality {
         // jitsi-meet
         // TODO: We should keep track of the remote resolution in _remoteStats,
         // and notify about changes via separate events.
-        conference.on(
-            ConferenceEvents.CONNECTION_STATS,
+        conference.statistics.addConnectionStatsListener(
             this._updateLocalStats.bind(this));
 
         // Save the last time we were unmuted.
@@ -346,9 +340,14 @@ export default class ConnectionQuality {
             const millisSinceStart = window.performance.now()
                     - Math.max(this._timeVideoUnmuted, this._timeIceConnected);
 
+            // Figure out if simulcast is in use
+            const activeTPC = this._conference.getActivePeerConnection();
+            const isSimulcastOn
+                = Boolean(activeTPC && activeTPC.isSimulcastOn());
+
             // expected sending bitrate in perfect conditions
             let target
-                = getTarget(this._simulcast, resolution, millisSinceStart);
+                = getTarget(isSimulcastOn, resolution, millisSinceStart);
 
             target = 0.9 * target;
 
@@ -396,7 +395,8 @@ export default class ConnectionQuality {
         const data = {
             bitrate: this._localStats.bitrate,
             packetLoss: this._localStats.packetLoss,
-            connectionQuality: this._localStats.connectionQuality
+            connectionQuality: this._localStats.connectionQuality,
+            jvbRTT: this._localStats.jvbRTT
         };
 
         // TODO: It looks like the remote participants don't really "care"
@@ -428,9 +428,26 @@ export default class ConnectionQuality {
 
     /**
      * Updates the local statistics
+     * @param {TraceablePeerConnection} tpc the peerconnection which emitted
+     * the stats
      * @param data new statistics
      */
-    _updateLocalStats(data) {
+    _updateLocalStats(tpc, data) {
+        // Update jvbRTT
+        if (!tpc.isP2P) {
+            const jvbRTT
+                = data.transport
+                    && data.transport.length && data.transport[0].rtt;
+
+            this._localStats.jvbRTT = jvbRTT ? jvbRTT : undefined;
+        }
+
+        // Do not continue with processing of other stats if they do not
+        // originate from the active peerconnection
+        if (tpc !== this._conference.getActivePeerConnection()) {
+            return;
+        }
+
         let key;
         const updateLocalConnectionQuality
             = !this._conference.isConnectionInterrupted();
@@ -477,7 +494,8 @@ export default class ConnectionQuality {
         this._remoteStats[id] = {
             bitrate: data.bitrate,
             packetLoss: data.packetLoss,
-            connectionQuality: data.connectionQuality
+            connectionQuality: data.connectionQuality,
+            jvbRTT: data.jvbRTT
         };
 
         this.eventEmitter.emit(

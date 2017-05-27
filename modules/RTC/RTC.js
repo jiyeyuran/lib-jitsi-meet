@@ -96,12 +96,31 @@ export default class RTC extends Listenable {
          * @private
          * @type {number}
          */
-        this._lastN = null;
+        this._lastN = -1;
 
-        // Defines the last N endpoints list. It can be null or an array once
-        // initialised with a datachannel last N event.
-        // @type {Array<string>|null}
+        /**
+         * Defines the last N endpoints list. It can be null or an array once
+         * initialised with a datachannel last N event.
+         * @type {Array<string>|null}
+         * @private
+         */
         this._lastNEndpoints = null;
+
+        /**
+         * The endpoint ID of currently pinned participant or <tt>null</tt> if
+         * no user is pinned.
+         * @type {string|null}
+         * @private
+         */
+        this._pinnedEndpoint = null;
+
+        /**
+         * The endpoint ID of currently selected participant or <tt>null</tt> if
+         * no user is selected.
+         * @type {string|null}
+         * @private
+         */
+        this._selectedEndpoint = null;
 
         // The last N change listener.
         this._lastNChangeListener = this._onLastNChanged.bind(this);
@@ -165,14 +184,17 @@ export default class RTC extends Listenable {
                 // about video selections so that it can do adaptive simulcast,
                 // we want the notification to trigger even if userJid
                 // is undefined, or null.
-                // XXX why do we not do the same for pinned endpoints?
                 try {
+                    this.dataChannels.sendPinnedEndpointMessage(
+                        this._pinnedEndpoint);
                     this.dataChannels.sendSelectedEndpointMessage(
-                        this.selectedEndpoint);
+                        this._selectedEndpoint);
                 } catch (error) {
                     GlobalOnErrorHandler.callErrorHandler(error);
-                    logger.error('Cannot sendSelectedEndpointMessage ',
-                        this.selectedEndpoint, '. Error: ', error);
+                    logger.error(
+                        `Cannot send selected(${this._selectedEndpoint})`
+                        + `pinned(${this._pinnedEndpoint}) endpoint message.`,
+                        error);
                 }
 
                 this.removeListener(RTCEvents.DATA_CHANNEL_OPEN,
@@ -181,10 +203,10 @@ export default class RTC extends Listenable {
 
                 // If setLastN was invoked before the data channels completed
                 // opening, apply the specified value now that the data channels
-                // are open.
-                if (this._lastN !== null) {
-                    this.setLastN(this._lastN);
-                    this._lastN = null;
+                // are open. NOTE that -1 is the default value assumed by both
+                // RTC module and the JVB.
+                if (this._lastN !== -1) {
+                    this.dataChannels.sendSetLastNMessage(this._lastN);
                 }
             };
             this.addListener(RTCEvents.DATA_CHANNEL_OPEN,
@@ -247,7 +269,7 @@ export default class RTC extends Listenable {
      */
     selectEndpoint(id) {
         // cache the value if channel is missing, till we open it
-        this.selectedEndpoint = id;
+        this._selectedEndpoint = id;
         if (this.dataChannels && this.dataChannelsOpen) {
             this.dataChannels.sendSelectedEndpointMessage(id);
         }
@@ -262,12 +284,10 @@ export default class RTC extends Listenable {
      * fails.
      */
     pinEndpoint(id) {
-        if (this.dataChannels) {
+        // cache the value if channel is missing, till we open it
+        this._pinnedEndpoint = id;
+        if (this.dataChannels && this.dataChannelsOpen) {
             this.dataChannels.sendPinnedEndpointMessage(id);
-        } else {
-            // FIXME: cache value while there is no data channel created
-            // and send the cached state once channel is created
-            throw new Error('Data channels support is disabled!');
         }
     }
 
@@ -380,6 +400,15 @@ export default class RTC extends Listenable {
         this.localTracks.push(track);
 
         track.conference = this.conference;
+    }
+
+    /**
+     * Returns the current value for "lastN" - the amount of videos are going
+     * to be delivered. When set to -1 for unlimited or all available videos.
+     * @return {number}
+     */
+    getLastN() {
+        return this._lastN;
     }
 
     /**
@@ -647,81 +676,32 @@ export default class RTC extends Listenable {
         }
     }
 
+    /* eslint-disable max-params */
     /**
      *
-     * @param resource
-     * @param audioLevel
+     * @param {TraceablePeerConnection} tpc
+     * @param {number} ssrc
+     * @param {number} audioLevel
+     * @param {boolean} isLocal
      */
-    setAudioLevel(ssrc, audioLevel) {
-        const track = this._getTrackBySSRC(ssrc);
+    setAudioLevel(tpc, ssrc, audioLevel, isLocal) {
+        const track = tpc.getTrackBySSRC(ssrc);
 
         if (!track) {
             return;
-        }
-        if (!track.isAudioTrack()) {
+        } else if (!track.isAudioTrack()) {
             logger.warn(`Received audio level for non-audio track: ${ssrc}`);
 
             return;
+        } else if (track.isLocal() !== isLocal) {
+            logger.error(
+                `${track} was expected to ${isLocal ? 'be' : 'not be'} local`);
         }
 
-        track.setAudioLevel(audioLevel);
+        track.setAudioLevel(tpc, audioLevel);
     }
 
-    /**
-     * Searches in localTracks(session stores ssrc for audio and video) and
-     * remoteTracks for the ssrc and returns the corresponding resource.
-     * @param ssrc the ssrc to check.
-     */
-    getResourceBySSRC(ssrc) {
-        const track = this._getTrackBySSRC(ssrc);
-
-        return track ? track.getParticipantId() : null;
-    }
-
-    /**
-     * Finds a track (either local or remote) which runs on the given SSRC.
-     * @param {string|number} ssrc
-     * @return {JitsiTrack|undefined}
-     *
-     * FIXME figure out where SSRC is stored as a string and convert to number
-     * @private
-     */
-    _getTrackBySSRC(ssrc) {
-        let track
-            = this.getLocalTracks().find(
-                localTrack =>
-
-                    // It is important that SSRC is not compared with ===,
-                    // because the code calling this method is inconsistent
-                    // about string vs number types
-                    Array.from(this.peerConnections.values())
-                         .find(pc => pc.getLocalSSRC(localTrack) == ssrc) // eslint-disable-line eqeqeq, max-len
-                );
-
-        if (!track) {
-            track = this._getRemoteTrackBySSRC(ssrc);
-        }
-
-        return track;
-    }
-
-    /**
-     * Searches in remoteTracks for the ssrc and returns the corresponding
-     * track.
-     * @param ssrc the ssrc to check.
-     * @return {JitsiRemoteTrack|undefined} return the first remote track that
-     * matches given SSRC or <tt>undefined</tt> if no such track was found.
-     * @private
-     */
-    _getRemoteTrackBySSRC(ssrc) {
-        /* eslint-disable eqeqeq */
-        // FIXME: Convert the SSRCs in whole project to use the same type.
-        // Now we are using number and string.
-        return this.getRemoteTracks().find(
-            remoteTrack => ssrc == remoteTrack.getSSRC());
-
-        /* eslint-enable eqeqeq */
-    }
+    /* eslint-enable max-params */
 
     /**
      * Sends message via the datachannels.
@@ -746,13 +726,12 @@ export default class RTC extends Listenable {
      * @param value {number} the new value for lastN.
      */
     setLastN(value) {
-        if (this.dataChannels && this.dataChannelsOpen) {
-            this.dataChannels.sendSetLastNMessage(value);
-        } else {
-            // No data channel has been initialized or has completed opening
-            // yet. Remember the specified value and apply it as soon as a data
-            // channel opens.
+        if (this._lastN !== value) {
             this._lastN = value;
+            if (this.dataChannels && this.dataChannelsOpen) {
+                this.dataChannels.sendSetLastNMessage(value);
+            }
+            this.eventEmitter.emit(RTCEvents.LASTN_VALUE_CHANGED, value);
         }
     }
 

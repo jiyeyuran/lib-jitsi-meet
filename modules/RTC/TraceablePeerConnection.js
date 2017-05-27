@@ -356,7 +356,7 @@ TraceablePeerConnection.prototype._getDesiredMediaDirection
  */
 TraceablePeerConnection.prototype.isSimulcastOn = function() {
     return !this.options.disableSimulcast
-        && this.simulcast.isSupported()
+        && RTCBrowserType.supportsSimulcast()
         && !this.isP2P;
 };
 
@@ -474,6 +474,30 @@ TraceablePeerConnection.prototype.getRemoteTracks
 };
 
 /**
+ * Tries to find {@link JitsiTrack} for given SSRC number. It will search both
+ * local and remote tracks bound to this instance.
+ * @param {number} ssrc
+ * @return {JitsiTrack|null}
+ */
+TraceablePeerConnection.prototype.getTrackBySSRC = function(ssrc) {
+    if (typeof ssrc !== 'number') {
+        throw new Error(`SSRC ${ssrc} is not a number`);
+    }
+    for (const localTrack of this.localTracks.values()) {
+        if (this.getLocalSSRC(localTrack) === ssrc) {
+            return localTrack;
+        }
+    }
+    for (const remoteTrack of this.getRemoteTracks()) {
+        if (remoteTrack.getSSRC() === ssrc) {
+            return remoteTrack;
+        }
+    }
+
+    return null;
+};
+
+/**
  * Called when new remote MediaStream is added to the PeerConnection.
  * @param {MediaStream} stream the WebRTC MediaStream for remote participant
  */
@@ -575,10 +599,20 @@ TraceablePeerConnection.prototype._remoteTrackAdded = function(stream, track) {
 
     // FIXME the length of ssrcLines[0] not verified, but it will fail
     // with global error handler anyway
-    const trackSsrc = ssrcLines[0].substring(7).split(' ')[0];
+    const ssrcStr = ssrcLines[0].substring(7).split(' ')[0];
+    const trackSsrc = Number(ssrcStr);
     const ownerEndpointId = this.signalingLayer.getSSRCOwner(trackSsrc);
 
-    if (!ownerEndpointId) {
+    if (isNaN(trackSsrc) || trackSsrc < 0) {
+        GlobalOnErrorHandler.callErrorHandler(
+            new Error(
+                `Invalid SSRC: ${ssrcStr
+                    } for remote track, msid: ${streamId
+                    } media type: ${mediaType}`));
+
+        // Abort
+        return;
+    } else if (!ownerEndpointId) {
         GlobalOnErrorHandler.callErrorHandler(
             new Error(
                 `No SSRC owner known for: ${trackSsrc
@@ -622,7 +656,7 @@ TraceablePeerConnection.prototype._remoteTrackAdded = function(stream, track) {
  * @param {MediaStreamTrack} track the WebRTC track instance
  * @param {MediaType} mediaType the track's type of the media
  * @param {VideoType} [videoType] the track's type of the video (if applicable)
- * @param {string} ssrc the track's main SSRC number
+ * @param {number} ssrc the track's main SSRC number
  * @param {boolean} muted the initial muted status
  */
 TraceablePeerConnection.prototype._createRemoteTrack
