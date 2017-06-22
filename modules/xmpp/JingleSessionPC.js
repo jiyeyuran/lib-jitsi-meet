@@ -202,6 +202,8 @@ export default class JingleSessionPC extends JingleSession {
          * @type {boolean}
          */
         this.wasConnected = false;
+
+        this.relay = !isP2P && Array.isArray(options.iceConfig);
     }
 
     /**
@@ -292,6 +294,9 @@ export default class JingleSessionPC extends JingleSession {
             if (candidate) {
                 if (this._gatheringStartedTimestamp === null) {
                     this._gatheringStartedTimestamp = now;
+                }
+                if (this.relay && candidate.candidate.indexOf('relay') < 0) {
+                    return;
                 }
 
                 // Discard candidates of disabled protocols.
