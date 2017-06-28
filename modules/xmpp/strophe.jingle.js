@@ -34,7 +34,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.jvbIceConfig = { iceServers: [ ] };
         this.p2pIceConfig = { iceServers: [ ] };
         if (Array.isArray(xmpp.options.iceServers)) {
-            this.jvbIceConfig = xmpp.options.iceServers;
+            this.jvbIceConfig.iceServers = xmpp.options.iceServers;
         }
         if (Array.isArray(p2pStunServers)) {
             logger.info('Configured STUN servers: ', p2pStunServers);

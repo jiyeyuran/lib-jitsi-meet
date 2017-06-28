@@ -1439,6 +1439,14 @@ TraceablePeerConnection.prototype.setLocalDescription
 
     this.trace('setLocalDescription::preTransform', dumpSDP(localSdp));
 
+    if (this.options.preferVideoCodec) {
+        const parsedSdp = transform.parse(localSdp.sdp);
+        const videoMLine = parsedSdp.media.find(m => m.type === 'video');
+
+        SDPUtil.preferVideoCodec(videoMLine, this.options.preferVideoCodec);
+        localSdp.sdp = transform.write(parsedSdp);
+    }
+
     this._adjustLocalMediaDirection(localSdp);
 
     this._ensureSimulcastGroupIsLast(localSdp);
@@ -1513,7 +1521,7 @@ TraceablePeerConnection.prototype.setRemoteDescription
         SDPUtil.preferVideoCodec(videoMLine, 'h264');
         description.sdp = transform.write(parsedSdp);
     }
-    
+
     if (this.options.preferVideoCodec) {
         const parsedSdp = transform.parse(description.sdp);
         const videoMLine = parsedSdp.media.find(m => m.type === 'video');

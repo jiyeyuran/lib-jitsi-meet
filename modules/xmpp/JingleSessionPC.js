@@ -203,7 +203,7 @@ export default class JingleSessionPC extends JingleSession {
          */
         this.wasConnected = false;
 
-        this.relay = !isP2P && Array.isArray(options.iceConfig);
+        this.relay = !isP2P && Array.isArray(iceConfig.iceServers);
     }
 
     /**
