@@ -199,8 +199,6 @@ export default class JingleSessionPC extends JingleSession {
          * @type {boolean}
          */
         this.wasConnected = false;
-
-        this.relay = !isP2P && Array.isArray(iceConfig.iceServers);
     }
 
     /* eslint-enable max-params */
@@ -274,7 +272,8 @@ export default class JingleSessionPC extends JingleSession {
                 if (this._gatheringStartedTimestamp === null) {
                     this._gatheringStartedTimestamp = now;
                 }
-                if (this.relay && candidate.candidate.indexOf('relay') < 0) {
+                if (this.iceConfig.iceTransportPolicy === 'relay'
+                    && candidate.candidate.indexOf('relay') < 0) {
                     return;
                 }
 

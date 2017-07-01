@@ -31,14 +31,12 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.xmpp = xmpp;
         this.eventEmitter = eventEmitter;
         this.sessions = {};
-        this.jvbIceConfig = { iceServers: [ ] };
         this.p2pIceConfig = { iceServers: [ ] };
-        if (Array.isArray(xmpp.options.iceServers)) {
-            this.jvbIceConfig.iceServers = xmpp.options.iceServers;
-        }
         if (Array.isArray(p2pStunServers)) {
             logger.info('Configured STUN servers: ', p2pStunServers);
             this.p2pIceConfig.iceServers = p2pStunServers;
+            this.p2pIceConfig.iceTransportPolicy
+                = xmpp.options.p2p.iceTransportPolicy;
         }
         this.mediaConstraints = {
             mandatory: {
@@ -157,7 +155,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                         fromJid,
                         this.connection,
                         this.mediaConstraints,
-                        isP2P ? this.p2pIceConfig : this.jvbIceConfig,
+                        this.p2pIceConfig,
                         isP2P /* P2P */,
                         false /* initiator */,
                         this.xmpp.options);
@@ -359,7 +357,6 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                     }
                     }
                 });
-                this.jvbIceConfig.iceServers = iceservers;
             }, err => {
                 logger.warn('getting turn credentials failed', err);
                 logger.warn('is mod_turncredentials or similar installed?');
