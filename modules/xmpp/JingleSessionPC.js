@@ -150,6 +150,12 @@ export default class JingleSessionPC extends JingleSession {
          */
         this._gatheringReported = false;
 
+        /**
+         * WebSocket URL for the bridge channel with the videobridge.
+         * @type {string}
+         */
+        this.bridgeWebSocketUrl = null;
+
         this.lasticecandidate = false;
         this.closed = false;
 
@@ -188,15 +194,6 @@ export default class JingleSessionPC extends JingleSession {
             = async.queue(this._processQueueTasks.bind(this), 1);
 
         /**
-         * This is the MUC JID which will be used to add "owner" extension to
-         * each of the local SSRCs signaled over Jingle.
-         * Usually those are added automatically by Jicofo, but it is not
-         * involved in a P2P session.
-         * @type {string}
-         */
-        this.ssrcOwnerJid = null;
-
-        /**
          * Flag used to guarantee that the connection established event is
          * triggered just once.
          * @type {boolean}
@@ -205,6 +202,8 @@ export default class JingleSessionPC extends JingleSession {
 
         this.relay = !isP2P && Array.isArray(iceConfig.iceServers);
     }
+
+    /* eslint-enable max-params */
 
     /**
      * Checks whether or not this session instance has been ended and eventually
@@ -227,32 +226,6 @@ export default class JingleSessionPC extends JingleSession {
     }
 
     /**
-     * Finds all "source" elements under RTC "description" in given Jingle IQ
-     * and adds 'ssrc-info' with the owner attribute set to
-     * {@link ssrcOwnerJid}.
-     * @param jingleIq the IQ to be modified
-     * @private
-     */
-    _markAsSSRCOwner(jingleIq) {
-        $(jingleIq).find('description source')
-                   .append(
-                        '<ssrc-info xmlns="http://jitsi.org/jitmeet" '
-                            + `owner="${this.ssrcOwnerJid}"></ssrc-info>`);
-    }
-
-    /**
-     * Sets the JID which will be as an owner value for the local SSRCs
-     * signaled over Jingle. Should be our MUC JID.
-     * @param {string} ownerJid
-     */
-    setSSRCOwnerJid(ownerJid) {
-        this.ssrcOwnerJid = ownerJid;
-    }
-
-
-    /* eslint-enable max-params */
-
-    /**
      *
      */
     doInitialize() {
@@ -273,8 +246,14 @@ export default class JingleSessionPC extends JingleSession {
                 {
                     disableSimulcast: this.room.options.disableSimulcast,
                     disableRtx: this.room.options.disableRtx,
-                    preferVideoCodec: this.room.options.preferVideoCodec,
-                    preferH264: this.room.options.preferH264
+                    preferVideoCodec: this.isP2P
+                        ? this.room.options.p2p
+                            && this.room.options.p2p.preferVideoCodec
+                        : this.room.options.preferVideoCodec,
+                    preferH264: this.isP2P
+                        ? this.room.options.p2p
+                            && this.room.options.p2p.preferH264
+                        : this.room.options.preferH264
                 });
 
         this.peerconnection.onicecandidate = ev => {
@@ -607,6 +586,7 @@ export default class JingleSessionPC extends JingleSession {
                     // providing it, let's leave it like this for the time
                     // being...
                     // sdpMid: 'audio',
+                    sdpMid: '',
                     candidate: line
                 });
 
@@ -649,15 +629,19 @@ export default class JingleSessionPC extends JingleSession {
      * @param contents
      */
     readSsrcInfo(contents) {
-        $(contents).each((i1, content) => {
-            const ssrcs
-                = $(content).find(
-                    'description>'
-                        + 'source[xmlns="urn:xmpp:jingle:apps:rtp:ssma:0"]');
+        const ssrcs
+            = $(contents).find(
+                '>description>'
+                    + 'source[xmlns="urn:xmpp:jingle:apps:rtp:ssma:0"]');
 
-            ssrcs.each((i2, ssrcElement) => {
-                const ssrc = Number(ssrcElement.getAttribute('ssrc'));
+        ssrcs.each((i, ssrcElement) => {
+            const ssrc = Number(ssrcElement.getAttribute('ssrc'));
 
+            if (this.isP2P) {
+                // In P2P all SSRCs are owner by the remote peer
+                this.signalingLayer.setSSRCOwner(
+                    ssrc, Strophe.getResourceFromJid(this.peerjid));
+            } else {
                 $(ssrcElement)
                     .find('>ssrc-info[xmlns="http://jitsi.org/jitmeet"]')
                     .each((i3, ssrcInfoElement) => {
@@ -670,13 +654,28 @@ export default class JingleSessionPC extends JingleSession {
                                         + ` for ${owner}`);
                             } else {
                                 this.signalingLayer.setSSRCOwner(
-                                    ssrc, Strophe.getResourceFromJid(owner));
+                                ssrc, Strophe.getResourceFromJid(owner));
                             }
                         }
-                    }
-                );
-            });
+                    });
+            }
         });
+    }
+
+    /**
+     * Reads the "url" parameter in the <web-socket> tag of the jingle offer iq
+     * and stores it into this.bridgeWebSocketUrl.
+     * @param contets
+     */
+    readBridgeWebSocketUrl(contents) {
+        const webSocket
+            = $(contents)
+                .find('transport>web-socket')
+                .first();
+
+        if (webSocket.length === 1) {
+            this.bridgeWebSocketUrl = webSocket[0].getAttribute('url');
+        }
     }
 
     /**
@@ -798,7 +797,6 @@ export default class JingleSessionPC extends JingleSession {
                 init,
                 this.initiator === this.me ? 'initiator' : 'responder');
             init = init.tree();
-            this._markAsSSRCOwner(init);
             logger.info('Session-initiate: ', init);
             this.connection.sendIQ(init,
                 () => {
@@ -996,7 +994,6 @@ export default class JingleSessionPC extends JingleSession {
 
         // Calling tree() to print something useful
         accept = accept.tree();
-        this._markAsSSRCOwner(accept);
         logger.info('Sending session-accept', accept);
         this.connection.sendIQ(accept,
             success,
@@ -1403,6 +1400,7 @@ export default class JingleSessionPC extends JingleSession {
 
         remoteSdp.fromJingle(offerIq);
         this.readSsrcInfo($(offerIq).find('>content'));
+        this.readBridgeWebSocketUrl($(offerIq).find('>content'));
 
         return remoteSdp;
     }
