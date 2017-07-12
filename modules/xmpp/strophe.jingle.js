@@ -357,6 +357,17 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                     }
                     }
                 });
+
+                const options = this.xmpp.options;
+
+                if (options.useStunTurn) {
+                    this.jvbIceConfig.iceServers = iceservers;
+                }
+
+                if (options.p2p && options.p2p.useStunTurn) {
+                    this.p2pIceConfig.iceServers = iceservers;
+                }
+
             }, err => {
                 logger.warn('getting turn credentials failed', err);
                 logger.warn('is mod_turncredentials or similar installed?');
