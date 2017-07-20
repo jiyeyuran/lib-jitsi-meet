@@ -51,44 +51,93 @@ const CHROME_EXTENSION_IFRAME_ERROR
     = 'Chrome Web Store installations can only be started by the top frame.';
 
 /**
+ * The error returned by chrome when trying to start inline installation
+ * not from the "main" whitelisted site.
+ * @type {string}
+ */
+const CHROME_EXTENSION_INLINE_ERROR
+    = 'Installs can only be initiated by one of'
+        + ' the Chrome Web Store item\'s verified sites.';
+
+/**
  * The error message returned by chrome when the extension is installed.
  */
 const CHROME_NO_EXTENSION_ERROR_MSG // eslint-disable-line no-unused-vars
     = 'Could not establish connection. Receiving end does not exist.';
 
 /**
+ * The error message returned by chrome when the extension install action needs
+ * to be initiated by a user gesture.
+ * @type {string}
+ */
+const CHROME_USER_GESTURE_REQ_ERROR
+    = 'Chrome Web Store installations can only be initated by a user gesture.';
+
+/**
  * Handles obtaining a stream from a screen capture on different browsers.
  */
 const ScreenObtainer = {
+    /**
+     * If not <tt>null</tt> it means that the initialization process is still in
+     * progress. It is used to make desktop stream request wait and continue
+     * after it's done.
+     * {@type Promise|null}
+     */
+    intChromeExtPromise: null,
+
     obtainStream: null,
 
     /**
      * Initializes the function used to obtain a screen capture
      * (this.obtainStream).
      *
-     * @param options {object}
-     * @param gum {Function} GUM method
+     * @param {object} options
+     * @param {boolean} [options.disableDesktopSharing]
+     * @param {boolean} [options.desktopSharingChromeDisabled]
+     * @param {boolean} [options.desktopSharingChromeExtId]
+     * @param {boolean} [options.desktopSharingFirefoxDisabled]
+     * @param {boolean} [options.desktopSharingFirefoxExtId] (deprecated)
+     * @param {Function} gum GUM method
      */
-    init(options, gum) {
-        let obtainDesktopStream = null;
-
+    init(options = {
+        disableDesktopSharing: false,
+        desktopSharingChromeDisabled: false,
+        desktopSharingChromeExtId: null,
+        desktopSharingFirefoxDisabled: false,
+        desktopSharingFirefoxExtId: null
+    }, gum) {
         // eslint-disable-next-line no-param-reassign
         this.options = options = options || {};
         gumFunction = gum;
 
-        if (RTCBrowserType.isFirefox()) {
-            initFirefoxExtensionDetection(options);
-        }
+        this.obtainStream
+            = this.options.disableDesktopSharing
+                ? null : this._createObtainStreamMethod(options);
 
+        if (!this.obtainStream) {
+            logger.info('Desktop sharing disabled');
+        }
+    },
+
+    /**
+     * Returns a method which will be used to obtain the screen sharing stream
+     * (based on the browser type).
+     *
+     * @param {object} options passed from {@link init} - check description
+     * there
+     * @returns {Function}
+     * @private
+     */
+    _createObtainStreamMethod(options) {
         if (RTCBrowserType.isNWJS()) {
-            obtainDesktopStream = (_, onSuccess, onFailure) => {
+            return (_, onSuccess, onFailure) => {
                 window.JitsiMeetNW.obtainDesktopStream(
                     onSuccess,
                     (error, constraints) => {
                         let jitsiError;
 
                         // FIXME:
-                        // This is very very durty fix for recognising that the
+                        // This is very very dirty fix for recognising that the
                         // user have clicked the cancel button from the Desktop
                         // sharing pick window. The proper solution would be to
                         // detect this in the NWJS application by checking the
@@ -116,57 +165,70 @@ const ScreenObtainer = {
                     });
             };
         } else if (RTCBrowserType.isElectron()) {
-            obtainDesktopStream = this.obtainScreenOnElectron;
+            return this.obtainScreenOnElectron;
         } else if (RTCBrowserType.isTemasysPluginUsed()) {
             // XXX Don't require Temasys unless it's to be used because it
             // doesn't run on React Native, for example.
             const plugin
                 = require('./adapter.screenshare').WebRTCPlugin.plugin;
 
-            if (plugin.HasScreensharingFeature) {
-                if (plugin.isScreensharingAvailable) {
-                    obtainDesktopStream = obtainWebRTCScreen;
-                    logger.info('Using Temasys plugin for desktop sharing');
-                } else {
-                    logger.info(
-                        'Screensharing not available with Temasys plugin on'
-                            + ' this site');
-                }
-            } else {
-                logger.info(
+            if (!plugin.HasScreensharingFeature) {
+                logger.warn(
                     'Screensharing not supported by this plugin version');
+
+                return null;
+            } else if (!plugin.isScreensharingAvailable) {
+                logger.warn(
+                    'Screensharing not available with Temasys plugin on'
+                        + ' this site');
+
+                return null;
             }
+
+            logger.info('Using Temasys plugin for desktop sharing');
+
+            return obtainWebRTCScreen;
         } else if (RTCBrowserType.isChrome()) {
-            if (options.desktopSharingChromeDisabled
+            if (RTCBrowserType.getChromeVersion() < 34) {
+                logger.info('Chrome extension not supported until ver 34');
+
+                return null;
+            } else if (options.desktopSharingChromeDisabled
                 || options.desktopSharingChromeMethod === false
                 || !options.desktopSharingChromeExtId) {
+
                 // TODO: desktopSharingChromeMethod is deprecated, remove.
-                obtainDesktopStream = null;
-            } else if (RTCBrowserType.getChromeVersion() >= 34) {
-                obtainDesktopStream
-                    = this.obtainScreenFromExtension;
-                logger.info('Using Chrome extension for desktop sharing');
-                initChromeExtension(options);
-            } else {
-                logger.info('Chrome extension not supported until ver 34');
+                return null;
             }
+
+            logger.info('Using Chrome extension for desktop sharing');
+            this.intChromeExtPromise
+                = initChromeExtension(options).then(() => {
+                    this.intChromeExtPromise = null;
+                });
+
+            return this.obtainScreenFromExtension;
         } else if (RTCBrowserType.isFirefox()) {
             if (options.desktopSharingFirefoxDisabled) {
-                obtainDesktopStream = null;
+                return null;
             } else if (window.location.protocol === 'http:') {
                 logger.log('Screen sharing is not supported over HTTP. '
                     + 'Use of HTTPS is required.');
-                obtainDesktopStream = null;
-            } else {
-                obtainDesktopStream = this.obtainScreenOnFirefox;
+
+                return null;
             }
+
+            initFirefoxExtensionDetection(options);
+
+            return this.obtainScreenOnFirefox;
         }
 
-        if (!obtainDesktopStream) {
-            logger.info('Desktop sharing disabled');
-        }
+        logger.warn(
+            'Screen sharing not supported by the current browser: ',
+            RTCBrowserType.getBrowserType(),
+            RTCBrowserType.getBrowserName());
 
-        this.obtainStream = obtainDesktopStream;
+        return null;
     },
 
     /**
@@ -282,6 +344,15 @@ const ScreenObtainer = {
      * 'desktop' stream for returned stream token.
      */
     obtainScreenFromExtension(options, streamCallback, failCallback) {
+        if (this.intChromeExtPromise !== null) {
+            this.intChromeExtPromise.then(() => {
+                this.obtainScreenFromExtension(
+                    options, streamCallback, failCallback);
+            });
+
+            return;
+        }
+
         const {
             desktopSharingChromeExtId,
             desktopSharingChromeSources
@@ -353,7 +424,8 @@ const ScreenObtainer = {
         const webStoreInstallUrl = getWebStoreInstallUrl(this.options);
 
         if ((CHROME_EXTENSION_POPUP_ERROR === e
-             || CHROME_EXTENSION_IFRAME_ERROR === e)
+             || CHROME_EXTENSION_IFRAME_ERROR === e
+             || CHROME_EXTENSION_INLINE_ERROR === e)
                 && options.interval > 0
                 && typeof options.checkAgain === 'function'
                 && typeof options.listener === 'function') {
@@ -368,9 +440,13 @@ const ScreenObtainer = {
             = `Failed to install the extension from ${webStoreInstallUrl}`;
 
         logger.log(msg, e);
-        failCallback(new JitsiTrackError(
-            JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR,
-            msg));
+
+        const error
+            = e === CHROME_USER_GESTURE_REQ_ERROR
+                ? JitsiTrackErrors.CHROME_EXTENSION_USER_GESTURE_REQUIRED
+                : JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR;
+
+        failCallback(new JitsiTrackError(error, msg));
     },
 
     /* eslint-enable max-params */
@@ -557,19 +633,25 @@ function initInlineInstalls(options) {
 /**
  *
  * @param options
+ *
+ * @return {Promise} - a Promise resolved once the initialization process is
+ * finished.
  */
 function initChromeExtension(options) {
     // Initialize Chrome extension inline installs
     initInlineInstalls(options);
 
-    // Check if extension is installed
-    checkChromeExtInstalled((installed, updateRequired) => {
-        chromeExtInstalled = installed;
-        chromeExtUpdateRequired = updateRequired;
-        logger.info(
-            `Chrome extension installed: ${chromeExtInstalled
-                } updateRequired: ${chromeExtUpdateRequired}`);
-    }, options);
+    return new Promise(resolve => {
+        // Check if extension is installed
+        checkChromeExtInstalled((installed, updateRequired) => {
+            chromeExtInstalled = installed;
+            chromeExtUpdateRequired = updateRequired;
+            logger.info(
+                `Chrome extension installed: ${chromeExtInstalled
+                    } updateRequired: ${chromeExtUpdateRequired}`);
+            resolve();
+        }, options);
+    });
 }
 
 /**
