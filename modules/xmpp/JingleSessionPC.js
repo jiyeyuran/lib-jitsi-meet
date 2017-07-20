@@ -253,6 +253,10 @@ export default class JingleSessionPC extends JingleSession {
                     // simulcast needs to be disabled for P2P (121) calls
                     disableSimulcast: true,
                     disableRtx: this.room.options.disableRtx,
+                    preferH264: this.isP2P
+                        ? this.room.options.p2p
+                            && this.room.options.p2p.preferH264
+                        : this.room.options.preferH264,
                     preferVideoCodec: this.isP2P
                         ? this.room.options.p2p
                             && this.room.options.p2p.preferVideoCodec
