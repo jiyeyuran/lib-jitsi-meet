@@ -302,7 +302,7 @@ function getConstraints(um, options) {
                 chromeMediaSourceId: options.desktopStream,
                 maxWidth: window.screen.width,
                 maxHeight: window.screen.height,
-                maxFrameRate: options.maxScreenFps || 15
+                maxFrameRate: options.maxScreenFps || 3
             },
             optional: []
         };
