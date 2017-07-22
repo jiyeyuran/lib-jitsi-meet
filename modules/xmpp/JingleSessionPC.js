@@ -253,15 +253,10 @@ export default class JingleSessionPC extends JingleSession {
                     // simulcast needs to be disabled for P2P (121) calls
                     disableSimulcast: true,
                     disableRtx: this.room.options.disableRtx,
-                    preferH264: this.isP2P
-                        ? this.room.options.p2p
-                            && this.room.options.p2p.preferH264
-                        : this.room.options.preferH264,
-                    preferVideoCodec: this.isP2P
-                        ? this.room.options.p2p
+                    preferH264: this.room.options.p2p
+                            && this.room.options.p2p.preferH264,
+                    preferVideoCodec: this.room.options.p2p
                             && this.room.options.p2p.preferVideoCodec
-                        : this.room.options.preferVideoCodec,
-                    enableFirefoxSimulcast: false
                 });
         } else {
             this.peerconnection = this.rtc.createPeerConnection(
@@ -275,8 +270,8 @@ export default class JingleSessionPC extends JingleSession {
                         || this.room.options.preferH264,
                     disableRtx: this.room.options.disableRtx,
                     preferH264: this.room.options.preferH264,
-                    enableFirefoxSimulcast:
-                        this.room.options.enableFirefoxSimulcast
+                    enableFirefoxSimulcast: this.room.options.testing
+                        && this.room.options.testing.enableFirefoxSimulcast
                 });
         }
 
@@ -297,10 +292,6 @@ export default class JingleSessionPC extends JingleSession {
             if (candidate) {
                 if (this._gatheringStartedTimestamp === null) {
                     this._gatheringStartedTimestamp = now;
-                }
-                if (this.iceConfig.iceTransportPolicy === 'relay'
-                    && candidate.candidate.indexOf('relay') < 0) {
-                    return;
                 }
 
                 // Discard candidates of disabled protocols.

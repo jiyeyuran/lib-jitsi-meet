@@ -41,8 +41,10 @@ const SIM_LAYER_RIDS = [ SIM_LAYER_1_RID, SIM_LAYER_2_RID, SIM_LAYER_3_RID ];
  * in a peer to peer connection
  * @param {object} options <tt>TracablePeerConnection</tt> config options.
  * @param {boolean} options.disableSimulcast if set to 'true' will disable
- * the simulcast
+ * the simulcast.
  * @param {boolean} options.disableRtx if set to 'true' will disable the RTX
+ * @param {boolean} options.enableFirefoxSimulcast if set to 'true' will enable
+ * experimental simulcast support on Firefox.
  * @param {boolean} options.preferH264 if set to 'true' H264 will be preferred
  * over other video codecs.
  *
@@ -1669,10 +1671,12 @@ TraceablePeerConnection.prototype.setRemoteDescription
                 'setRemoteDescription::postTransform (Plan A)',
                 dumpSDP(description));
 
-        // eslint-disable-next-line no-param-reassign
-        description = this._insertUnifiedPlanSimulcastReceive(description);
-        this.trace('setRemoteDescription::postTransform (sim receive)',
-            dumpSDP(description));
+        if (this.isSimulcastOn()) {
+            // eslint-disable-next-line no-param-reassign
+            description = this._insertUnifiedPlanSimulcastReceive(description);
+            this.trace('setRemoteDescription::postTransform (sim receive)',
+                dumpSDP(description));
+        }
     } else {
         // Plan B
         // eslint-disable-next-line no-param-reassign
