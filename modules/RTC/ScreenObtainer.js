@@ -194,10 +194,8 @@ const ScreenObtainer = {
 
                 return null;
             } else if (options.desktopSharingChromeDisabled
-                || options.desktopSharingChromeMethod === false
                 || !options.desktopSharingChromeExtId) {
 
-                // TODO: desktopSharingChromeMethod is deprecated, remove.
                 return null;
             }
 
@@ -344,15 +342,19 @@ const ScreenObtainer = {
      * 'desktop' stream for returned stream token.
      */
     obtainScreenFromExtension(options, streamCallback, failCallback) {
-        if (this.intChromeExtPromise !== null) {
-            this.intChromeExtPromise.then(() => {
-                this.obtainScreenFromExtension(
-                    options, streamCallback, failCallback);
-            });
+        checkChromeExtInstalled((installed, updateRequired) => {
+            chromeExtInstalled = installed;
+            chromeExtUpdateRequired = updateRequired;
+            this._obtainScreenFromExtension(
+                options, streamCallback, failCallback);
+        }, this.options);
+    },
 
-            return;
-        }
-
+    /**
+     * Asks Chrome extension to call chooseDesktopMedia and gets chrome
+     * 'desktop' stream for returned stream token.
+     */
+    _obtainScreenFromExtension(options, streamCallback, failCallback) {
         const {
             desktopSharingChromeExtId,
             desktopSharingChromeSources
