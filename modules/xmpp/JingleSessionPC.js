@@ -150,12 +150,6 @@ export default class JingleSessionPC extends JingleSession {
          */
         this._gatheringReported = false;
 
-        /**
-         * WebSocket URL for the bridge channel with the videobridge.
-         * @type {string}
-         */
-        this.bridgeWebSocketUrl = null;
-
         this.lasticecandidate = false;
         this.closed = false;
 
@@ -681,22 +675,6 @@ export default class JingleSessionPC extends JingleSession {
     }
 
     /**
-     * Reads the "url" parameter in the <web-socket> tag of the jingle offer iq
-     * and stores it into this.bridgeWebSocketUrl.
-     * @param contets
-     */
-    readBridgeWebSocketUrl(contents) {
-        const webSocket
-            = $(contents)
-                .find('transport>web-socket')
-                .first();
-
-        if (webSocket.length === 1) {
-            this.bridgeWebSocketUrl = webSocket[0].getAttribute('url');
-        }
-    }
-
-    /**
      * Makes the underlying TraceablePeerConnection generate new SSRC for
      * the recvonly video stream.
      * @deprecated
@@ -760,12 +738,22 @@ export default class JingleSessionPC extends JingleSession {
                 this.peerconnection.addTrack(localTrack);
             }
             this.peerconnection.createOffer(
-                sdp => {
-                    this.sendSessionInitiate(
-                        sdp,
-                        finishedCallback,
-                        finishedCallback
-                    );
+                offerSdp => {
+                    this.peerconnection.setLocalDescription(
+                        offerSdp,
+                        () => {
+                            // NOTE that the offer is obtained from
+                            // the localDescription getter as it needs to go
+                            // though the transformation chain.
+                            this.sendSessionInitiate(
+                                this.peerconnection.localDescription.sdp);
+                            finishedCallback();
+                        },
+                        error => {
+                            logger.error(
+                                'Failed to set local SDP', error, offerSdp);
+                            finishedCallback(error);
+                        });
                 },
                 error => {
                     logger.error(
@@ -790,53 +778,38 @@ export default class JingleSessionPC extends JingleSession {
 
     /**
      * Sends 'session-initiate' to the remote peer.
-     * @param {object} sdp the local session description object as defined by
-     * the WebRTC standard.
-     * @param {function} success executed when the operation succeeds.
-     * @param {function(error)} failure executed when the operation fails with
-     * an error passed as an argument.
+     *
+     * NOTE this method is synchronous and we're not waiting for the RESULT
+     * response which would delay the startup process.
+     *
+     * @param {string} offerSdp  - The local session description which will be
+     * used to generate an offer.
      * @private
      */
-    sendSessionInitiate(sdp, success, failure) {
-        logger.log('createdOffer', sdp);
-        const sendJingle = () => {
-            let init = $iq({
-                to: this.peerjid,
-                type: 'set'
-            }).c('jingle', {
-                xmlns: 'urn:xmpp:jingle:1',
-                action: 'session-initiate',
-                initiator: this.initiator,
-                sid: this.sid
-            });
-            const localSDP = new SDP(this.peerconnection.localDescription.sdp);
+    sendSessionInitiate(offerSdp) {
+        let init = $iq({
+            to: this.peerjid,
+            type: 'set'
+        }).c('jingle', {
+            xmlns: 'urn:xmpp:jingle:1',
+            action: 'session-initiate',
+            initiator: this.initiator,
+            sid: this.sid
+        });
 
-            localSDP.toJingle(
-                init,
-                this.initiator === this.me ? 'initiator' : 'responder');
-            init = init.tree();
-            logger.info('Session-initiate: ', init);
-            this.connection.sendIQ(init,
-                () => {
-                    logger.info('Got RESULT for "session-initiate"');
-                },
-                error => {
-                    logger.error('"session-initiate" error', error);
-                },
-                IQ_TIMEOUT);
-
-            // NOTE the callback is executed immediately as we don't want to
-            // wait for the XMPP response which would delay the startup process.
-            success();
-        };
-
-        this.peerconnection.setLocalDescription(
-            sdp, sendJingle,
+        new SDP(offerSdp).toJingle(
+            init,
+            this.initiator === this.me ? 'initiator' : 'responder');
+        init = init.tree();
+        logger.info('Session-initiate: ', init);
+        this.connection.sendIQ(init,
+            () => {
+                logger.info('Got RESULT for "session-initiate"');
+            },
             error => {
-                logger.error('session-init setLocalDescription failed', error);
-                failure(error);
-            }
-        );
+                logger.error('"session-initiate" error', error);
+            },
+            IQ_TIMEOUT);
     }
 
     /**
@@ -1419,7 +1392,6 @@ export default class JingleSessionPC extends JingleSession {
 
         remoteSdp.fromJingle(offerIq);
         this.readSsrcInfo($(offerIq).find('>content'));
-        this.readBridgeWebSocketUrl($(offerIq).find('>content'));
 
         return remoteSdp;
     }
@@ -1559,7 +1531,16 @@ export default class JingleSessionPC extends JingleSession {
             this.peerconnection.setRemoteDescription(
                 remoteDescription,
                 () => {
-                    resolve();
+                    // In case when the answer is being set for the first time,
+                    // full sRD/sLD cycle is required to have the local
+                    // description updated and SSRCs synchronized correctly.
+                    // Otherwise SSRCs for streams added after invite, but
+                    // before the answer was accepted will not be detected.
+                    // The reason for that is that renegotiate can not be called
+                    // when adding tracks and they will not be reflected in
+                    // the local SDP.
+                    this._initiatorRenegotiate(
+                        remoteDescription, resolve, reject);
                 },
                 error => reject(`setRemoteDescription failed: ${error}`)
             );
