@@ -342,19 +342,14 @@ const ScreenObtainer = {
      * 'desktop' stream for returned stream token.
      */
     obtainScreenFromExtension(options, streamCallback, failCallback) {
-        checkChromeExtInstalled((installed, updateRequired) => {
-            chromeExtInstalled = installed;
-            chromeExtUpdateRequired = updateRequired;
-            this._obtainScreenFromExtension(
-                options, streamCallback, failCallback);
-        }, this.options);
-    },
+        if (this.intChromeExtPromise !== null) {
+            this.intChromeExtPromise.then(() => {
+                this.obtainScreenFromExtension(
+                    options, streamCallback, failCallback);
+            });
 
-    /**
-     * Asks Chrome extension to call chooseDesktopMedia and gets chrome
-     * 'desktop' stream for returned stream token.
-     */
-    _obtainScreenFromExtension(options, streamCallback, failCallback) {
+            return;
+        }
         const {
             desktopSharingChromeExtId,
             desktopSharingChromeSources
