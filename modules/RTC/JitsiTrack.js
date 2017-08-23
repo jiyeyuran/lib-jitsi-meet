@@ -62,7 +62,7 @@ export default class JitsiTrack extends EventEmitter {
     /**
      * Represents a single media track (either audio or video).
      * @constructor
-     * @param rtc the rtc instance
+     * @param conference the rtc instance
      * @param stream the WebRTC MediaStream instance
      * @param track the WebRTC MediaStreamTrack instance, must be part of
      * the given <tt>stream</tt>.
@@ -72,12 +72,12 @@ export default class JitsiTrack extends EventEmitter {
      * @param videoType the VideoType for this track if any
      */
     constructor(
-        conference,
-        stream,
-        track,
-        streamInactiveHandler,
-        trackMediaType,
-        videoType) {
+            conference,
+            stream,
+            track,
+            streamInactiveHandler,
+            trackMediaType,
+            videoType) {
         super();
 
         // aliases for addListener/removeListener
@@ -90,12 +90,11 @@ export default class JitsiTrack extends EventEmitter {
          */
         this.containers = [];
         this.conference = conference;
-        this.stream = stream;
         this.audioLevel = -1;
         this.type = trackMediaType;
         this.track = track;
         this.videoType = videoType;
-        this.handlers = {};
+        this.handlers = new Map();
 
         /**
          * Indicates whether this JitsiTrack has been disposed. If true, this
@@ -105,10 +104,32 @@ export default class JitsiTrack extends EventEmitter {
          * @type {boolean}
          */
         this.disposed = false;
-        this._setHandler('inactive', streamInactiveHandler);
+
+        /**
+         * The inactive handler which will be triggered when the underlying
+         * <tt>MediaStream</tt> ends.
+         *
+         * @private
+         * @type {Function}
+         */
+        this._streamInactiveHandler = streamInactiveHandler;
+
+        this._setStream(stream);
     }
 
     /* eslint-enable max-params */
+
+    /**
+     * Binds the inactive handler.
+     * @param {Function} streamInactiveHandler
+     * @private
+     */
+    _bindInactiveHandler(streamInactiveHandler) {
+        if (RTCBrowserType.isFirefox()) {
+            implementOnEndedHandling(this);
+        }
+        addMediaStreamInactiveHandler(this.stream, streamInactiveHandler);
+    }
 
     /**
      * Sets handler to the WebRTC MediaStream or MediaStreamTrack object
@@ -117,34 +138,74 @@ export default class JitsiTrack extends EventEmitter {
      * @param {Function} handler the handler.
      */
     _setHandler(type, handler) {
-        this.handlers[type] = handler;
+        if (!trackHandler2Prop.hasOwnProperty(type)) {
+            logger.error(`Invalid handler type ${type}`);
+
+            return;
+        }
+        if (handler) {
+            this.handlers.set(type, handler);
+        } else {
+            this.handlers.delete(type);
+        }
+
+        if (this.stream) {
+            // FIXME Why only video tracks?
+            for (const track of this.stream.getVideoTracks()) {
+                track[trackHandler2Prop[type]] = handler;
+            }
+        }
+    }
+
+    /**
+     * Unregisters all event handlers bound to the underlying media stream/track
+     * @private
+     */
+    _unregisterHandlers() {
         if (!this.stream) {
+            logger.warn(
+                `${this}: unable to unregister handlers - no stream object`);
+
             return;
         }
 
-        if (type === 'inactive') {
-            if (RTCBrowserType.isFirefox()) {
-                implementOnEndedHandling(this);
+        for (const type of this.handlers.keys()) {
+            // FIXME Why only video tracks?
+            for (const videoTrack of this.stream.getVideoTracks()) {
+                videoTrack[trackHandler2Prop[type]] = undefined;
             }
-            addMediaStreamInactiveHandler(this.stream, handler);
-        } else if (trackHandler2Prop.hasOwnProperty(type)) {
-            this.stream.getVideoTracks().forEach(track => {
-                track[trackHandler2Prop[type]] = handler;
-            }, this);
+        }
+        if (this._streamInactiveHandler) {
+            addMediaStreamInactiveHandler(this.stream, undefined);
         }
     }
 
     /**
      * Sets the stream property of JitsiTrack object and sets all stored
      * handlers to it.
+     *
      * @param {MediaStream} stream the new stream.
+     * @protected
      */
     _setStream(stream) {
+        if (this.stream === stream) {
+            return;
+        }
+
         this.stream = stream;
-        Object.keys(this.handlers).forEach(type => {
-            typeof this.handlers[type] === 'function'
-                && this._setHandler(type, this.handlers[type]);
-        }, this);
+
+        // TODO Practically, that's like the opposite of _unregisterHandlers
+        // i.e. may be abstracted into a function/method called
+        // _registerHandlers for clarity and easing the maintenance of the two
+        // pieces of source code.
+        if (this.stream) {
+            for (const type of this.handlers.keys()) {
+                this._setHandler(type, this.handlers.get(type));
+            }
+            if (this._streamInactiveHandler) {
+                this._bindInactiveHandler(this._streamInactiveHandler);
+            }
+        }
     }
 
     /**
@@ -384,7 +445,6 @@ export default class JitsiTrack extends EventEmitter {
     getMSID() {
         const streamId = this.getStreamId();
         const trackId = this.getTrackId();
-
 
         return streamId && trackId ? `${streamId} ${trackId}` : null;
     }
