@@ -79,6 +79,54 @@ function filterNodeFromPresenceJSON(pres, nodeName) {
     return res;
 }
 
+/**
+ * Constants used to verify if a given JSON message via the MUC should be
+ * considered as a ENDPOINT_MESSAGE
+ */
+const VALID_FIELD_NAMES = [ 'jitsi-meet-muc-msg-topic', 'payload' ];
+
+/**
+ * Check if the given argument is a valid JSON ENDPOINT_MESSAGE string by
+ * parsing it and checking if it has a field called 'jitsi-meet-muc-msg-topic'
+ * and a field called 'payload'
+ *
+ * @param {string} jsonString check if this string is a valid json string
+ * and contains the special structure
+ * @returns {boolean, object} if given object is a valid JSON string, return
+ * the json object. Otherwise, return false;
+ */
+function tryParseJSONAndVerify(jsonString) {
+    try {
+        const json = JSON.parse(jsonString);
+
+        // Handle non-exception-throwing cases:
+        // Neither JSON.parse(false) or JSON.parse(1234) throw errors,
+        // hence the type-checking,
+        // but... JSON.parse(null) returns null, and
+        // typeof null === "object",
+        // so we must check for that, too.
+        // Thankfully, null is falsey, so this suffices:
+        if (json && typeof json === 'object') {
+            const topic = json[VALID_FIELD_NAMES[0]];
+            const payload = json[VALID_FIELD_NAMES[1]];
+
+            if ((typeof topic === 'string' || topic instanceof String)
+                && payload) {
+
+                return json;
+            }
+
+            logger.debug('parsing valid json but does not have correct '
+                + 'structure', 'topic: ', topic, 'payload: ', payload);
+        }
+    } catch (e) {
+
+        return false;
+    }
+
+    return false;
+}
+
 // XXX As ChatRoom constructs XMPP stanzas and Strophe is build around the idea
 // of chaining function calls, allow long function call chains.
 /* eslint-disable newline-per-chained-call */
@@ -341,7 +389,14 @@ export default class ChatRoom extends Listenable {
         const member = {};
 
         member.show = $(pres).find('>show').text();
-        member.status = $(pres).find('>status').text();
+        const $statusNode = $(pres).find('>status');
+        const hasStatus = $statusNode.length;
+
+        if (hasStatus) {
+            member.status = $statusNode.text();
+        }
+        let hasStatusUpdate = false;
+
         const mucUserItem
             = $(pres).find(
                 '>x[xmlns="http://jabber.org/protocol/muc#user"]>item');
@@ -418,6 +473,8 @@ export default class ChatRoom extends Listenable {
                     XMPPEvents.MUC_MEMBER_JOINED,
                     from, member.nick, member.role, member.isHiddenDomain);
             }
+
+            hasStatusUpdate = member.status !== undefined;
         } else {
             // Presence update for existing participant
             // Watch role change:
@@ -446,6 +503,12 @@ export default class ChatRoom extends Listenable {
             // store the new display name
             if (member.displayName) {
                 memberOfThis.displayName = member.displayName;
+            }
+
+            // update stored status message to be able to detect changes
+            if (memberOfThis.status !== member.status) {
+                hasStatusUpdate = true;
+                memberOfThis.status = member.status;
             }
         }
 
@@ -493,8 +556,8 @@ export default class ChatRoom extends Listenable {
             }
         }
 
-        // Trigger status message update
-        if (member.status) {
+        // Trigger status message update if necessary
+        if (hasStatusUpdate) {
             this.eventEmitter.emit(
                 XMPPEvents.PRESENCE_STATUS,
                 from,
@@ -740,6 +803,15 @@ export default class ChatRoom extends Listenable {
                             + '>status[code="104"]')
                     .length) {
             this.discoRoomInfo();
+        }
+
+        const json = tryParseJSONAndVerify(txt);
+
+        if (json) {
+            this.eventEmitter.emit(XMPPEvents.JSON_MESSAGE_RECEIVED,
+                from, json);
+
+            return;
         }
 
         if (txt) {
