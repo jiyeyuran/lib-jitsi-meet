@@ -1748,7 +1748,8 @@ export default class JingleSessionPC extends JingleSession {
 
         if (Object.keys(addedMedia).length) {
             logger.error(
-                `Some SSRC were added on ${operationName}`, addedMedia);
+                `${this} - some SSRC were added on ${operationName}`,
+                addedMedia);
 
             return false;
         }
@@ -1758,7 +1759,8 @@ export default class JingleSessionPC extends JingleSession {
 
         if (Object.keys(removedMedia).length) {
             logger.error(
-                `Some SSRCs were removed on ${operationName}`, removedMedia);
+                `${this} - some SSRCs were removed on ${operationName}`,
+                removedMedia);
 
             return false;
         }

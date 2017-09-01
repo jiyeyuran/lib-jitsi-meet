@@ -204,7 +204,9 @@ JitsiConference.prototype._init = function(options = {}) {
         this.eventManager.setupXMPPListeners();
     }
 
-    this.room = this.xmpp.createRoom(this.options.name, this.options.config);
+    const { config } = this.options;
+
+    this.room = this.xmpp.createRoom(this.options.name, config);
 
     // Connection interrupted/restored listeners
     this._onIceConnectionInterrupted
@@ -236,23 +238,29 @@ JitsiConference.prototype._init = function(options = {}) {
                 // as an entry point through config for tuning up purposes.
                 // Default values should be adjusted as soon as optimal values
                 // are discovered.
-                rtcMuteTimeout:
-                    this.options.config._peerConnStatusRtcMuteTimeout,
-                outOfLastNTimeout:
-                    this.options.config._peerConnStatusOutOfLastNTimeout
+                rtcMuteTimeout: config._peerConnStatusRtcMuteTimeout,
+                outOfLastNTimeout: config._peerConnStatusOutOfLastNTimeout
             });
     this.participantConnectionStatus.init();
 
     if (!this.statistics) {
+        // XXX The property location on the global variable window is not
+        // defined in all execution environments (e.g. react-native). While
+        // jitsi-meet may polyfill it when executing on react-native, it is
+        // better for the cross-platform support to not require window.location
+        // especially when there is a worthy alternative (as demonstrated
+        // bellow).
+        const windowLocation = window.location;
+
         this.statistics = new Statistics(this.xmpp, {
-            callStatsID: this.options.config.callStatsID,
-            callStatsSecret: this.options.config.callStatsSecret,
-            callStatsConfIDNamespace:
-                this.options.config.callStatsConfIDNamespace
-                    || window.location.hostname,
-            callStatsCustomScriptUrl:
-                this.options.config.callStatsCustomScriptUrl,
             callStatsAliasName: this.myUserId(),
+            callStatsConfIDNamespace:
+                config.callStatsConfIDNamespace
+                    || (windowLocation && windowLocation.hostname)
+                    || (config.hosts && config.hosts.domain),
+            callStatsCustomScriptUrl: config.callStatsCustomScriptUrl,
+            callStatsID: config.callStatsID,
+            callStatsSecret: config.callStatsSecret,
             roomName: this.options.name
         });
     }
@@ -263,7 +271,7 @@ JitsiConference.prototype._init = function(options = {}) {
     // listeners are removed from statistics module.
     this.eventManager.setupStatisticsListeners();
 
-    if (this.options.config.enableTalkWhileMuted) {
+    if (config.enableTalkWhileMuted) {
         // eslint-disable-next-line no-new
         new TalkMutedDetection(
             this,
@@ -271,8 +279,8 @@ JitsiConference.prototype._init = function(options = {}) {
                 this.eventEmitter.emit(JitsiConferenceEvents.TALK_WHILE_MUTED));
     }
 
-    if ('channelLastN' in options.config) {
-        this.setLastN(options.config.channelLastN);
+    if ('channelLastN' in config) {
+        this.setLastN(config.channelLastN);
     }
 
     /**

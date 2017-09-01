@@ -1,9 +1,9 @@
-/* global $, callstats */
-const logger = require('jitsi-meet-logger').getLogger(__filename);
-const GlobalOnErrorHandler = require('../util/GlobalOnErrorHandler');
+/* global callstats */
 
-const jsSHA = require('jssha');
-const io = require('socket.io-client');
+import RTCBrowserType from '../RTC/RTCBrowserType';
+import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
+
+const logger = require('jitsi-meet-logger').getLogger(__filename);
 
 /**
  * We define enumeration of wrtcFuncNames as we need them before
@@ -288,7 +288,12 @@ export default class CallStats {
                 // to not log the whole log batch
                 // FIXME check the current logging level (currently not exposed
                 // by the logger implementation)
-                console && console.debug('reportError', pc, cs, type);
+                // NOTE it is not safe to log whole objects on react-native as
+                // those contain too many circular references and may crash
+                // the app.
+                if (!RTCBrowserType.isReactNative()) {
+                    console && console.debug('reportError', pc, cs, type);
+                }
             } else {
                 logger.debug('reportError', pc, cs, type, ...args);
             }
@@ -336,8 +341,15 @@ export default class CallStats {
             throw new Error('CallStats backend has been initialized already!');
         }
         try {
-            CallStats.backend
-                = new callstats($, io, jsSHA); // eslint-disable-line new-cap
+            // In react-native we need to import the callstats module, but
+            // imports are only allowed at top-level, so we must use require
+            // here. Sigh.
+            const CallStatsBackend
+                = RTCBrowserType.isReactNative()
+                    ? require('react-native-callstats/callstats')
+                    : callstats;
+
+            CallStats.backend = new CallStatsBackend();
 
             CallStats._traceAndCatchBackendCalls(CallStats.backend);
 
@@ -499,7 +511,7 @@ export default class CallStats {
      * @return {boolean} true if the call was successful or false otherwise.
      */
     _addNewFabric() {
-        logger.info('addNewFabric', this.remoteUserID, this);
+        logger.info('addNewFabric', this.remoteUserID);
         try {
             const ret
                 = CallStats.backend.addNewFabric(
