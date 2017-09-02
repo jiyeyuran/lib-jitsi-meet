@@ -1,6 +1,7 @@
 /* global __dirname */
 
 const child_process = require('child_process'); // eslint-disable-line camelcase
+const path = require('path');
 const process = require('process');
 const webpack = require('webpack');
 
@@ -64,8 +65,8 @@ module.exports = {
             // Transpile ES2015 (aka ES6) to ES5.
 
             exclude: [
-                `${__dirname}/modules/RTC/adapter.screenshare.js`,
-                `${__dirname}/node_modules/`
+                path.resolve(__dirname, 'modules/RTC/adapter.screenshare.js'),
+                path.resolve(__dirname, 'node_modules')
             ],
             loader: 'babel-loader',
             options: {
