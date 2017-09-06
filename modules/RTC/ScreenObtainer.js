@@ -331,7 +331,8 @@ const ScreenObtainer = {
                     onGetStreamResponse(
                         {
                             streamId,
-                            streamType
+                            streamType,
+                            maxScreenFps: this.options.maxScreenFps
                         },
                         onSuccess,
                         onFailure
@@ -361,11 +362,13 @@ const ScreenObtainer = {
             return;
         }
         const {
+            maxScreenFps,
             desktopSharingChromeExtId,
             desktopSharingChromeSources
         } = this.options;
 
         const gumOptions = {
+            maxScreenFps,
             desktopSharingChromeExtId,
             desktopSharingChromeSources:
                 options.desktopSharingSources
@@ -618,6 +621,7 @@ function doGetStreamFromExtension(options, streamCallback, failCallback) {
 
                 return;
             }
+            response.maxScreenFps = options.maxScreenFps;
             logger.log('Response from extension: ', response);
             onGetStreamResponse(response, streamCallback, failCallback);
         }
@@ -705,7 +709,7 @@ function waitForExtensionAfterInstall(options, waitInterval, retries) {
  * @param {Function} onFailure - callback for failure.
  */
 function onGetStreamResponse(
-        { streamId, streamType, error },
+        { streamId, streamType, maxScreenFps, error },
         onSuccess,
         onFailure) {
     if (streamId) {
@@ -717,7 +721,10 @@ function onGetStreamResponse(
                 sourceType: streamType
             }),
             onFailure,
-            { desktopStream: streamId });
+            {
+                desktopStream: streamId,
+                maxScreenFps
+            });
     } else {
         // As noted in Chrome Desktop Capture API:
         // If user didn't select any source (i.e. canceled the prompt)
