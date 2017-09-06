@@ -250,7 +250,9 @@ export default class JingleSessionPC extends JingleSession {
                     preferH264: this.room.options.p2p
                             && this.room.options.p2p.preferH264,
                     preferVideoCodec: this.room.options.p2p
-                            && this.room.options.p2p.preferVideoCodec
+                            && this.room.options.p2p.preferVideoCodec,
+                    bandwidth: this.room.options.p2p
+                            && this.room.options.p2p.bandwidth
                 });
         } else {
             this.peerconnection = this.rtc.createPeerConnection(
@@ -265,7 +267,8 @@ export default class JingleSessionPC extends JingleSession {
                     disableRtx: this.room.options.disableRtx,
                     preferH264: this.room.options.preferH264,
                     enableFirefoxSimulcast: this.room.options.testing
-                        && this.room.options.testing.enableFirefoxSimulcast
+                        && this.room.options.testing.enableFirefoxSimulcast,
+                    bandwidth: this.room.options.bandwidth
                 });
         }
 

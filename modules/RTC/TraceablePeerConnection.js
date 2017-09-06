@@ -9,6 +9,7 @@ import * as MediaType from '../../service/RTC/MediaType';
 import LocalSdpMunger from './LocalSdpMunger';
 import RTC from './RTC';
 import RTCUtils from './RTCUtils';
+import BandwidthHandler from './BandwidthHandler';
 import RTCBrowserType from './RTCBrowserType';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import RtxModifier from '../xmpp/RtxModifier';
@@ -1575,6 +1576,11 @@ TraceablePeerConnection.prototype.setLocalDescription
 
         this.trace('setLocalDescription::postTransform (preferH264)',
             dumpSDP(localSdp));
+    }
+
+    if (this.options.bandwidth) {
+        localSdp.sdp = BandwidthHandler.setVideoBitrates(
+            localSdp.sdp, this.options.preferH264, this.options.bandwidth);
     }
 
     this._adjustLocalMediaDirection(localSdp);
