@@ -29,7 +29,7 @@ if (minimize) {
 module.exports = {
     devtool: 'source-map',
     entry: {
-        'lib-jhmeeting': './index.js'
+        'lib-jitsi-meet': './index.js'
     },
     module: {
         rules: [ {
