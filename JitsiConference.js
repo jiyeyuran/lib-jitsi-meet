@@ -1168,9 +1168,6 @@ JitsiConference.prototype.onMemberLeft = function(jid) {
         return;
     }
     const participant = this.participants[id];
-
-    delete this.participants[id];
-
     const removedTracks = this.rtc.removeRemoteTracks(id);
 
     removedTracks.forEach(
@@ -1181,6 +1178,7 @@ JitsiConference.prototype.onMemberLeft = function(jid) {
     if (participant) {
         this.eventEmitter.emit(
             JitsiConferenceEvents.USER_LEFT, id, participant);
+        delete this.participants[id];
     }
 
     this._maybeStartOrStopP2P(true /* triggered by user left event */);
