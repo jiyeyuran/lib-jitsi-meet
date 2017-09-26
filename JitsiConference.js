@@ -6,6 +6,7 @@ import ConnectionQuality from './modules/connectivity/ConnectionQuality';
 import { getLogger } from 'jitsi-meet-logger';
 import GlobalOnErrorHandler from './modules/util/GlobalOnErrorHandler';
 import EventEmitter from 'events';
+import authenticateAndUpgradeRole from './authenticateAndUpgradeRole';
 import * as JitsiConferenceErrors from './JitsiConferenceErrors';
 import JitsiConferenceEventManager from './JitsiConferenceEventManager';
 import * as JitsiConferenceEvents from './JitsiConferenceEvents';
@@ -301,6 +302,18 @@ JitsiConference.prototype.join = function(password) {
     if (this.room) {
         this.room.join(password);
     }
+};
+
+/**
+ * Authenticates and upgrades the role of the local participant/user.
+ *
+ * @returns {Object} A <tt>thenable</tt> which (1) settles when the process of
+ * authenticating and upgrading the role of the local participant/user finishes
+ * and (2) has a <tt>cancel</tt> method that allows the caller to interrupt the
+ * process.
+ */
+JitsiConference.prototype.authenticateAndUpgradeRole = function(...args) {
+    return authenticateAndUpgradeRole.apply(this, args);
 };
 
 /**
@@ -628,6 +641,15 @@ JitsiConference.prototype.getTranscriber = function() {
     }
 
     return this.transcriber;
+};
+
+/**
+ * Returns the transcription status.
+ *
+ * @returns {String} "on" or "off".
+ */
+JitsiConference.prototype.getTranscriptionStatus = function() {
+    return this.room.transcriptionStatus;
 };
 
 /**

@@ -78,7 +78,7 @@ export default function Moderator(roomName, xmpp, emitter, options) {
 
                 return;
             }
-            Settings.setSessionId(event.data.sessionId);
+            Settings.sessionId = event.data.sessionId;
 
             // After popup is closed we will authenticate
         }
@@ -143,8 +143,8 @@ Moderator.prototype.createConferenceIq = function() {
         type: 'set' });
 
     // Session Id used for authentication
-    const sessionId = Settings.getSessionId();
-    const machineUID = Settings.getMachineId();
+    const { sessionId } = Settings;
+    const machineUID = Settings.machineId;
 
     logger.info(`Session ID: ${sessionId} machine UID: ${machineUID}`);
 
@@ -276,7 +276,7 @@ Moderator.prototype.parseSessionId = function(resultIq) {
 
     if (sessionId) {
         logger.info(`Received sessionId:  ${sessionId}`);
-        Settings.setSessionId(sessionId);
+        Settings.sessionId = sessionId;
     }
 };
 
@@ -357,11 +357,13 @@ Moderator.prototype.allocateConferenceFocus = function(callback) {
 Moderator.prototype._allocateConferenceFocusError = function(error, callback) {
     // If the session is invalid, remove and try again without session ID to get
     // a new one
-    const invalidSession = $(error).find('>error>session-invalid').length;
+    const invalidSession
+        = $(error).find('>error>session-invalid').length
+            || $(error).find('>error>not-acceptable').length;
 
     if (invalidSession) {
         logger.info('Session expired! - removing');
-        Settings.clearSessionId();
+        Settings.sessionId = undefined;
     }
     if ($(error).find('>error>graceful-shutdown').length) {
         this.eventEmitter.emit(XMPPEvents.GRACEFUL_SHUTDOWN);
@@ -465,12 +467,13 @@ Moderator.prototype.authenticate = function() {
             result => {
                 this.parseSessionId(result);
                 resolve();
-            }, error => {
-                // eslint-disable-next-line newline-per-chained-call
-                const code = $(error).find('>error').attr('code');
-
-                reject(error, code);
-            }
+            },
+            errorIq => reject({
+                error: $(errorIq).find('iq>error :first')
+                                 .prop('tagName'),
+                message: $(errorIq).find('iq>error>text')
+                                   .text()
+            })
         );
     });
 };
@@ -492,7 +495,7 @@ Moderator.prototype._getLoginUrl = function(popup, urlCb, failureCb) {
     const attrs = {
         xmlns: 'http://jitsi.org/protocol/focus',
         room: this.roomName,
-        'machine-uid': Settings.getMachineId()
+        'machine-uid': Settings.machineId
     };
     let str = 'auth url'; // for logger
 
@@ -539,7 +542,7 @@ Moderator.prototype.getPopupLoginUrl = function(urlCallback, failureCallback) {
 Moderator.prototype.logout = function(callback) {
     const iq = $iq({ to: this.getFocusComponent(),
         type: 'set' });
-    const sessionId = Settings.getSessionId();
+    const { sessionId } = Settings;
 
     if (!sessionId) {
         callback();
@@ -560,7 +563,7 @@ Moderator.prototype.logout = function(callback) {
                 logoutUrl = decodeURIComponent(logoutUrl);
             }
             logger.info(`Log out OK, url: ${logoutUrl}`, result);
-            Settings.clearSessionId();
+            Settings.sessionId = undefined;
             callback(logoutUrl);
         },
         error => {
