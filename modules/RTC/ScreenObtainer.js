@@ -659,8 +659,9 @@ function initChromeExtension(options) {
             chromeExtInstalled = installed;
             chromeExtUpdateRequired = updateRequired;
             logger.info(
-                `Chrome extension installed: ${chromeExtInstalled
-                    } updateRequired: ${chromeExtUpdateRequired}`);
+                `Chrome extension installed: ${
+                    chromeExtInstalled} updateRequired: ${
+                    chromeExtUpdateRequired}`);
             resolve();
         }, options);
     });
@@ -775,9 +776,9 @@ function initFirefoxExtensionDetection(options) {
     // "chrome://EXT_ID/content/DOMAIN.png"
     // Where EXT_ID is the ID of the extension with "@" replaced by ".", and
     // DOMAIN is a domain whitelisted by the extension.
-    const src
-        = `chrome://${options.desktopSharingFirefoxExtId.replace('@', '.')
-            }/content/${document.location.hostname}.png`;
+    const extId = options.desktopSharingFirefoxExtId.replace('@', '.');
+    const domain = document.location.hostname;
+    const src = `chrome://${extId}/content/${domain}.png`;
 
     img.setAttribute('src', src);
 }

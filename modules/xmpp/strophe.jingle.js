@@ -137,8 +137,10 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                 const audioMuted = startMuted.attr('audio');
                 const videoMuted = startMuted.attr('video');
 
-                this.eventEmitter.emit(XMPPEvents.START_MUTED_FROM_FOCUS,
-                        audioMuted === 'true', videoMuted === 'true');
+                this.eventEmitter.emit(
+                    XMPPEvents.START_MUTED_FROM_FOCUS,
+                    audioMuted === 'true',
+                    videoMuted === 'true');
             }
 
             // FIXME that should work most of the time, but we'd have to
@@ -149,23 +151,24 @@ class JingleConnectionPlugin extends ConnectionPlugin {
             logger.info(
                 `Marking session from ${fromJid
                 } as ${isP2P ? '' : '*not*'} P2P`);
-            sess = new JingleSessionPC(
-                        $(iq).find('jingle').attr('sid'),
-                        $(iq).attr('to'),
-                        fromJid,
-                        this.connection,
-                        this.mediaConstraints,
-                        this.p2pIceConfig,
-                        isP2P /* P2P */,
-                        false /* initiator */,
-                        this.xmpp.options);
+            sess
+                = new JingleSessionPC(
+                    $(iq).find('jingle').attr('sid'),
+                    $(iq).attr('to'),
+                    fromJid,
+                    this.connection,
+                    this.mediaConstraints,
+                    this.p2pIceConfig,
+                    isP2P,
+                    /* initiator */ false,
+                    this.xmpp.options);
 
             this.sessions[sess.sid] = sess;
 
             this.eventEmitter.emit(XMPPEvents.CALL_INCOMING,
-                    sess, $(iq).find('>jingle'), now);
+                sess, $(iq).find('>jingle'), now);
             Statistics.analytics.sendEvent(
-                    'xmpp.session-initiate', { value: now });
+                'xmpp.session-initiate', { value: now });
             break;
         }
         case 'session-accept': {
@@ -200,16 +203,16 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         case 'transport-replace':
             logger.info('(TIME) Start transport replace', now);
             Statistics.analytics.sendEvent(
-                    'xmpp.transport-replace.start', { value: now });
+                'xmpp.transport-replace.start',
+                { value: now });
 
             sess.replaceTransport($(iq).find('>jingle'), () => {
                 const successTime = window.performance.now();
 
-                logger.info(
-                        '(TIME) Transport replace success!', successTime);
+                logger.info('(TIME) Transport replace success!', successTime);
                 Statistics.analytics.sendEvent(
-                        'xmpp.transport-replace.success',
-                        { value: successTime });
+                    'xmpp.transport-replace.success',
+                    { value: successTime });
             }, error => {
                 GlobalOnErrorHandler.callErrorHandler(error);
                 logger.error('Transport replace failed', error);
@@ -228,9 +231,9 @@ class JingleConnectionPlugin extends ConnectionPlugin {
             logger.warn('jingle action not implemented', action);
             ack.attrs({ type: 'error' });
             ack.c('error', { type: 'cancel' })
-                    .c('bad-request',
-                        { xmlns: 'urn:ietf:params:xml:ns:xmpp-stanzas' })
-                    .up();
+                .c('bad-request',
+                    { xmlns: 'urn:ietf:params:xml:ns:xmpp-stanzas' })
+                .up();
             break;
         }
         this.connection.send(ack);
@@ -248,15 +251,15 @@ class JingleConnectionPlugin extends ConnectionPlugin {
     newP2PJingleSession(me, peer) {
         const sess
             = new JingleSessionPC(
-                    RandomUtil.randomHexString(12),
-                    me,
-                    peer,
-                    this.connection,
-                    this.mediaConstraints,
-                    this.p2pIceConfig,
-                    true /* P2P */,
-                    true /* initiator */,
-                    this.xmpp.options);
+                RandomUtil.randomHexString(12),
+                me,
+                peer,
+                this.connection,
+                this.mediaConstraints,
+                this.p2pIceConfig,
+                /* P2P */ true,
+                /* initiator */ true,
+                this.xmpp.options);
 
         this.sessions[sess.sid] = sess;
 
@@ -326,15 +329,14 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                         // ?id=1508
 
                         if (username) {
-                            if (navigator.userAgent.match(
-                                    /Chrom(e|ium)\/([0-9]+)\./)
-                                    && parseInt(
-                                        navigator.userAgent.match(
-                                            /Chrom(e|ium)\/([0-9]+)\./)[2],
-                                            10) < 28) {
+                            const match
+                                = navigator.userAgent.match(
+                                    /Chrom(e|ium)\/([0-9]+)\./);
+
+                            if (match && parseInt(match[2], 10) < 28) {
                                 dict.url += `${username}@`;
                             } else {
-                                    // only works in M28
+                                // only works in M28
                                 dict.username = username;
                             }
                         }
