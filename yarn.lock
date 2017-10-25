@@ -3760,13 +3760,13 @@ strip-json-comments@~2.0.1:
   version "2.0.1"
   resolved "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-2.0.1.tgz#3c531942e908c2697c0ec344858c286c7ca0a60a"
 
-strophe@1.2.4:
-  version "1.2.4"
-  resolved "https://registry.npmjs.org/strophe/-/strophe-1.2.4.tgz#c1199a171322d7823f0c9befcee9f8451683c2fb"
+strophe.js@1.2.14:
+  version "1.2.14"
+  resolved "http://registry.npm.taobao.org/strophe.js/download/strophe.js-1.2.14.tgz#7ceeec51b3272cc5c6c6ae77474780a5840f1aa7"
 
-strophejs-plugins@0.0.7:
-  version "0.0.7"
-  resolved "https://registry.npmjs.org/strophejs-plugins/-/strophejs-plugins-0.0.7.tgz#fefeea3d74c4b36109c733174e094eb737cb0599"
+strophejs-plugin-disco@0.0.2:
+  version "0.0.2"
+  resolved "http://registry.npm.taobao.org/strophejs-plugin-disco/download/strophejs-plugin-disco-0.0.2.tgz#a16312a34bf58518e13d23222948dcc9be3047f5"
 
 supports-color@^2.0.0:
   version "2.0.0"
