@@ -1677,6 +1677,10 @@ escope@^3.6.0:
     esrecurse "^4.1.0"
     estraverse "^4.1.1"
 
+eslint-config-jitsi@jitsi/eslint-config-jitsi#v0.1:
+  version "0.0.1"
+  resolved "https://codeload.github.com/jitsi/eslint-config-jitsi/tar.gz/64b9f255ae804eb91bd62a3c6fbeb8104944587a"
+
 eslint-import-resolver-node@^0.3.1:
   version "0.3.1"
   resolved "https://registry.npmjs.org/eslint-import-resolver-node/-/eslint-import-resolver-node-0.3.1.tgz#4422574cde66a9a7b099938ee4d508a199e0e3cc"
