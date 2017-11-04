@@ -1076,26 +1076,35 @@ const normalizePlanB = function(desc) {
  * @param {Object} localDescription the SDP object as defined by WebRTC.
  */
 const enforceSendRecv = function(localDescription) {
-    if (localDescription && localDescription.sdp) {
-        const transformer = new SdpTransformWrap(localDescription.sdp);
-        const audioMedia = transformer.selectMedia('audio');
-        let changed = false;
-
-        if (audioMedia && audioMedia.direction !== 'sendrecv') {
-            audioMedia.direction = 'sendrecv';
-            changed = true;
-        }
-        const videoMedia = transformer.selectMedia('video');
-
-        if (videoMedia && videoMedia.direction !== 'sendrecv') {
-            videoMedia.direction = 'sendrecv';
-            changed = true;
-        }
-
-        if (changed) {
-            localDescription.sdp = transformer.toRawSDP();
-        }
+    if (!localDescription
+        || !(localDescription instanceof RTCSessionDescription)) {
+        throw new Error('Incorrect type, expected RTCSessionDescription');
     }
+
+    const transformer = new SdpTransformWrap(localDescription.sdp);
+    const audioMedia = transformer.selectMedia('audio');
+    let changed = false;
+
+    if (audioMedia && audioMedia.direction !== 'sendrecv') {
+        audioMedia.direction = 'sendrecv';
+        changed = true;
+    }
+
+    const videoMedia = transformer.selectMedia('video');
+
+    if (videoMedia && videoMedia.direction !== 'sendrecv') {
+        videoMedia.direction = 'sendrecv';
+        changed = true;
+    }
+
+    if (changed) {
+        return new RTCSessionDescription({
+            type: localDescription.type,
+            sdp: transformer.toRawSDP()
+        });
+    }
+
+    return localDescription;
 };
 
 /**
@@ -1147,9 +1156,11 @@ TraceablePeerConnection.prototype._injectSsrcGroupForUnifiedSimulcast
                 ssrcs: ssrcs.join(' ')
             });
         }
-        desc.sdp = transform.write(sdp);
 
-        return desc;
+        return new RTCSessionDescription({
+            type: desc.type,
+            sdp: transform.write(sdp)
+        });
     };
 
 /* eslint-disable-next-line vars-on-top */
@@ -1170,13 +1181,14 @@ const getters = {
             desc = this.interop.toPlanB(desc);
             this.trace('getLocalDescription::postTransform (Plan B)',
                 dumpSDP(desc));
+
             desc = this._injectSsrcGroupForUnifiedSimulcast(desc);
             this.trace('getLocalDescription::postTransform (inject ssrc group)',
                 dumpSDP(desc));
         }
 
         if (RTCBrowserType.doesVideoMuteByStreamRemove()) {
-            this.localSdpMunger.maybeMungeLocalSdp(desc);
+            desc = this.localSdpMunger.maybeMungeLocalSdp(desc);
             logger.debug(
                 'getLocalDescription::postTransform (munge local SDP)', desc);
         }
@@ -1189,7 +1201,7 @@ const getters = {
         // Note that the description we set in chrome does have the accurate
         // direction (e.g. 'recvonly'), since that is technically what is
         // happening (check setLocalDescription impl).
-        enforceSendRecv(desc);
+        desc = enforceSendRecv(desc);
 
         return desc || {};
     },
@@ -1500,7 +1512,7 @@ TraceablePeerConnection.prototype._ensureSimulcastGroupIsLast = function(
     if (simStartIndex === -1
         || otherStartIndex === -1
         || otherStartIndex === simStartIndex) {
-        return;
+        return localSdp;
     }
 
     const simEndIndex = sdpStr.indexOf('\r\n', simStartIndex);
@@ -1515,7 +1527,10 @@ TraceablePeerConnection.prototype._ensureSimulcastGroupIsLast = function(
 
     sdpStr = `${sdpHead}\r\n${simStrTrimmed}${sdpTail}`;
 
-    localSdp.sdp = sdpStr;
+    return new RTCSessionDescription({
+        type: localSdp.type,
+        sdp: sdpStr
+    });
 };
 
 /**
@@ -1563,8 +1578,13 @@ TraceablePeerConnection.prototype._adjustLocalMediaDirection = function(
     }
 
     if (modifiedDirection) {
-        localDescription.sdp = transformer.toRawSDP();
+        return new RTCSessionDescription({
+            type: localDescription.type,
+            sdp: transformer.toRawSDP()
+        });
     }
+
+    return localDescription;
 };
 
 TraceablePeerConnection.prototype.setLocalDescription = function(
@@ -1585,7 +1605,10 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
             SDPUtil.preferVideoCodec(videoMLine, 'h264');
         }
 
-        localSdp.sdp = transform.write(parsedSdp);
+        localSdp = new RTCSessionDescription({
+            type: localSdp.type,
+            sdp: transform.write(parsedSdp)
+        });
 
         this.trace('setLocalDescription::postTransform (H264)',
             dumpSDP(localSdp));
@@ -1606,9 +1629,9 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
             localSdp.sdp, this.options.preferH264, this.options.bandwidth);
     }
 
-    this._adjustLocalMediaDirection(localSdp);
+    localSdp = this._adjustLocalMediaDirection(localSdp);
 
-    this._ensureSimulcastGroupIsLast(localSdp);
+    localSdp = this._ensureSimulcastGroupIsLast(localSdp);
 
     // if we're using unified plan, transform to it first.
     if (RTCBrowserType.usesUnifiedPlan()) {
@@ -1696,9 +1719,11 @@ TraceablePeerConnection.prototype._insertUnifiedPlanSimulcastReceive
         video.simulcast_03 = {
             value: `recv rid=${SIM_LAYER_RIDS.join(';')}`
         };
-        desc.sdp = transform.write(sdp);
 
-        return desc;
+        return new RTCSessionDescription({
+            type: desc.type,
+            sdp: transform.write(sdp)
+        });
     };
 
 TraceablePeerConnection.prototype.setRemoteDescription = function(
@@ -1719,7 +1744,12 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
         const videoMLine = parsedSdp.media.find(m => m.type === 'video');
 
         SDPUtil.preferVideoCodec(videoMLine, 'h264');
-        description.sdp = transform.write(parsedSdp);
+
+        // eslint-disable-next-line no-param-reassign
+        description = new RTCSessionDescription({
+            type: description.type,
+            sdp: transform.write(parsedSdp)
+        });
     }
 
     if (this.options.preferVideoCodec) {
@@ -1732,7 +1762,12 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
 
     // If the browser uses unified plan, transform to it first
     if (RTCBrowserType.usesUnifiedPlan()) {
-        description.sdp = this.rtxModifier.stripRtx(description.sdp);
+        // eslint-disable-next-line no-param-reassign
+        description = new RTCSessionDescription({
+            type: description.type,
+            sdp: this.rtxModifier.stripRtx(description.sdp)
+        });
+
         this.trace(
             'setRemoteDescription::postTransform (stripRtx)',
             dumpSDP(description));
@@ -2000,9 +2035,14 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
                     && !this.sdpConsistency.hasPrimarySsrcCached()) {
                     this.generateRecvonlySsrc();
                 }
-                resultSdp.sdp
-                    = this.sdpConsistency.makeVideoPrimarySsrcsConsistent(
-                        resultSdp.sdp);
+
+                // eslint-disable-next-line no-param-reassign
+                resultSdp = new RTCSessionDescription({
+                    type: resultSdp.type,
+                    sdp: this.sdpConsistency.makeVideoPrimarySsrcsConsistent(
+                        resultSdp.sdp)
+                });
+
                 this.trace(
                     `create${logName}OnSuccess::postTransform `
                          + '(make primary audio/video ssrcs consistent)',
@@ -2021,8 +2061,12 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
             }
 
             if (!this.options.disableRtx && RTCBrowserType.supportsRtx()) {
-                resultSdp.sdp
-                    = this.rtxModifier.modifyRtxSsrcs(resultSdp.sdp);
+                // eslint-disable-next-line no-param-reassign
+                resultSdp = new RTCSessionDescription({
+                    type: resultSdp.type,
+                    sdp: this.rtxModifier.modifyRtxSsrcs(resultSdp.sdp)
+                });
+
                 this.trace(
                     `create${logName}`
                          + 'OnSuccess::postTransform (rtx modifier)',
@@ -2037,7 +2081,12 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
                 const localDescription = new SDP(resultSdp.sdp);
 
                 _fixAnswerRFC4145Setup(remoteDescription, localDescription);
-                resultSdp.sdp = localDescription.raw;
+
+                // eslint-disable-next-line no-param-reassign
+                resultSdp = new RTCSessionDescription({
+                    type: resultSdp.type,
+                    sdp: localDescription.raw
+                });
             }
 
             const ssrcMap = extractSSRCMap(resultSdp);
