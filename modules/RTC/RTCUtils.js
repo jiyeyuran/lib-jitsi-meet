@@ -361,8 +361,8 @@ const DEFAULT_CONSTRAINTS = {
     video: {
         aspectRatio: 16 / 9,
         height: {
-            ideal: 1080,
-            max: 1080,
+            ideal: 360,
+            max: 360,
             min: 240
         }
     }
@@ -908,7 +908,8 @@ class RTCUtils extends Listenable {
                 };
                 this.getStreamID = stream => stream.id;
                 this.getTrackID = track => track.id;
-            } else if (RTCBrowserType.isOpera()
+            } else if (RTCBrowserType.isChrome()
+                    || RTCBrowserType.isOpera()
                     || RTCBrowserType.isNWJS()
                     || RTCBrowserType.isElectron()
                     || RTCBrowserType.isReactNative()) {
