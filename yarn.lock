@@ -1702,7 +1702,7 @@ escope@^3.6.0:
     esrecurse "^4.1.0"
     estraverse "^4.1.1"
 
-eslint-config-jitsi@jitsi/eslint-config-jitsi#v0.1:
+"eslint-config-jitsi@github:jitsi/eslint-config-jitsi#v0.1":
   version "0.0.1"
   resolved "https://codeload.github.com/jitsi/eslint-config-jitsi/tar.gz/64b9f255ae804eb91bd62a3c6fbeb8104944587a"
 
@@ -2001,9 +2001,9 @@ flat-cache@^1.2.1:
     graceful-fs "^4.1.2"
     write "^0.2.1"
 
-flow-bin@0.38.0:
-  version "0.38.0"
-  resolved "https://registry.npmjs.org/flow-bin/-/flow-bin-0.38.0.tgz#3ae096d401c969cc8b5798253fb82381e2d0237a"
+flow-bin@0.53.0:
+  version "0.53.0"
+  resolved "http://registry.npm.taobao.org/flow-bin/download/flow-bin-0.53.0.tgz#f7830e609ca02b12db4127114213cccc7c0771b9"
 
 for-in@^1.0.1:
   version "1.0.2"
@@ -2517,7 +2517,7 @@ jasmine-core@2.5.2:
   version "2.5.2"
   resolved "https://registry.npmjs.org/jasmine-core/-/jasmine-core-2.5.2.tgz#6f61bd79061e27f43e6f9355e44b3c6cab6ff297"
 
-jitsi-meet-logger@jitsi/jitsi-meet-logger:
+"jitsi-meet-logger@github:jitsi/jitsi-meet-logger#6fff754a77a56ab52499f3559105a15886942a1e":
   version "0.1.1"
   resolved "https://codeload.github.com/jitsi/jitsi-meet-logger/tar.gz/6fff754a77a56ab52499f3559105a15886942a1e"
 
@@ -3595,6 +3595,12 @@ ripemd160@^2.0.0, ripemd160@^2.0.1:
     hash-base "^2.0.0"
     inherits "^2.0.1"
 
+rtcpeerconnection-shim@^1.1.13:
+  version "1.1.13"
+  resolved "http://registry.npm.taobao.org/rtcpeerconnection-shim/download/rtcpeerconnection-shim-1.1.13.tgz#019fb9d5250675ed0a20cd5d9a49614e4482e1e0"
+  dependencies:
+    sdp "^2.2.0"
+
 run-async@^2.2.0:
   version "2.3.0"
   resolved "http://registry.npm.taobao.org/run-async/download/run-async-2.3.0.tgz#0371ab4ae0bdd720d4166d7dfda64ff7a445a6c0"
@@ -3630,6 +3636,10 @@ sdp-simulcast@0.2.1:
 sdp-transform@2.3.0:
   version "2.3.0"
   resolved "https://registry.npmjs.org/sdp-transform/-/sdp-transform-2.3.0.tgz#57a9575942041d8577a869d7c74d4c3a0bd888f6"
+
+sdp@^2.2.0, sdp@^2.3.0:
+  version "2.4.0"
+  resolved "http://registry.npm.taobao.org/sdp/download/sdp-2.4.0.tgz#0ea682319c0dbc91550aad19e9e53edcd7b1cdaa"
 
 "semver@2 || 3 || 4 || 5", semver@^5.3.0:
   version "5.4.1"
@@ -4160,6 +4170,13 @@ webpack@3.6.0:
     watchpack "^1.4.0"
     webpack-sources "^1.0.1"
     yargs "^8.0.2"
+
+"webrtc-adapter@github:webrtc/adapter#1eec19782b4058d186341263e7d049cea3e3290a":
+  version "5.0.6"
+  resolved "https://codeload.github.com/webrtc/adapter/tar.gz/1eec19782b4058d186341263e7d049cea3e3290a"
+  dependencies:
+    rtcpeerconnection-shim "^1.1.13"
+    sdp "^2.3.0"
 
 which-module@^2.0.0:
   version "2.0.0"
