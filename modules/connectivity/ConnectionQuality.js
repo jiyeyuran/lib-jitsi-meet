@@ -1,3 +1,5 @@
+/* global config */
+
 import * as ConnectionQualityEvents
     from '../../service/connectivity/ConnectionQualityEvents';
 import * as ConferenceEvents from '../../JitsiConferenceEvents';
@@ -100,6 +102,15 @@ function getTarget(simulcast, resolution, millisSinceStart) {
             }
         }
     } else {
+        if (config) {
+            const bandwidth = config.p2p && config.p2p.bandwidth;
+
+            if (bandwidth) {
+                return typeof bandwidth === 'number'
+                    ? bandwidth : bandwidth.video;
+            }
+        }
+
         // See GetMaxDefaultVideoBitrateKbps in
         // media/engine/webrtcvideoengine2.cc from webrtc.org
         const pixels = resolution.width * resolution.height;

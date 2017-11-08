@@ -1620,11 +1620,6 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
             dumpSDP(localSdp));
     }
 
-    if (this.options.bandwidth) {
-        localSdp.sdp = BandwidthHandler.setVideoBitrates(
-            localSdp.sdp, this.options.preferH264, this.options.bandwidth);
-    }
-
     localSdp = this._adjustLocalMediaDirection(localSdp);
 
     localSdp = this._ensureSimulcastGroupIsLast(localSdp);
@@ -1746,6 +1741,10 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
             type: description.type,
             sdp: transform.write(parsedSdp)
         });
+    }
+    if (this.options.bandwidth) {
+        description.sdp = BandwidthHandler.setBandwidth(
+            description.sdp, this.options.bandwidth);
     }
 
     // If the browser uses unified plan, transform to it first
