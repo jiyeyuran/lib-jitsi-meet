@@ -1174,10 +1174,16 @@ const getters = {
     localDescription() {
         let desc = this.peerconnection.localDescription;
 
+        if (!desc) {
+            logger.debug('getLocalDescription no localDescription found');
+
+            return {};
+        }
+
         this.trace('getLocalDescription::preTransform', dumpSDP(desc));
 
         // if we're running on FF, transform to Plan B first.
-        if (desc && RTCBrowserType.usesUnifiedPlan()) {
+        if (RTCBrowserType.usesUnifiedPlan()) {
             desc = this.interop.toPlanB(desc);
             this.trace('getLocalDescription::postTransform (Plan B)',
                 dumpSDP(desc));
@@ -1188,7 +1194,7 @@ const getters = {
         }
 
         if (RTCBrowserType.doesVideoMuteByStreamRemove()) {
-            desc = this.localSdpMunger.maybeMungeLocalSdp(desc);
+            desc = this.localSdpMunger.maybeAddMutedLocalVideoTracksToSDP(desc);
             logger.debug(
                 'getLocalDescription::postTransform (munge local SDP)', desc);
         }
@@ -1203,7 +1209,7 @@ const getters = {
         // happening (check setLocalDescription impl).
         desc = enforceSendRecv(desc);
 
-        return desc || {};
+        return desc;
     },
     remoteDescription() {
         let desc = this.peerconnection.remoteDescription;
@@ -1613,16 +1619,6 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
         this.trace('setLocalDescription::postTransform (H264)',
             dumpSDP(localSdp));
     }
-    if (this.options.preferVideoCodec) {
-        const parsedSdp = transform.parse(localSdp.sdp);
-        const videoMLine = parsedSdp.media.find(m => m.type === 'video');
-
-        SDPUtil.preferVideoCodec(videoMLine, this.options.preferVideoCodec);
-        localSdp.sdp = transform.write(parsedSdp);
-
-        this.trace('setLocalDescription::postTransform (preferH264)',
-            dumpSDP(localSdp));
-    }
 
     if (this.options.bandwidth) {
         localSdp.sdp = BandwidthHandler.setVideoBitrates(
@@ -1752,14 +1748,6 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
         });
     }
 
-    if (this.options.preferVideoCodec) {
-        const parsedSdp = transform.parse(description.sdp);
-        const videoMLine = parsedSdp.media.find(m => m.type === 'video');
-
-        SDPUtil.preferVideoCodec(videoMLine, this.options.preferVideoCodec);
-        description.sdp = transform.write(parsedSdp);
-    }
-
     // If the browser uses unified plan, transform to it first
     if (RTCBrowserType.usesUnifiedPlan()) {
         // eslint-disable-next-line no-param-reassign
@@ -1791,6 +1779,15 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
         description = normalizePlanB(description);
     }
 
+    // Safari WebRTC errors when no supported video codec is found in the offer.
+    // To prevent the error, inject H264 into the video mLine.
+    if (RTCBrowserType.usesNewGumFlow() && RTCBrowserType.isSafari()) {
+        logger.debug('Maybe injecting H264 into the remote description');
+
+        // eslint-disable-next-line no-param-reassign
+        description = this._injectH264IfNotPresent(description);
+    }
+
     this.peerconnection.setRemoteDescription(
         description,
         () => {
@@ -1812,6 +1809,76 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
                 this);
             failureCallback(err);
         });
+};
+
+/**
+ * Inserts an H264 payload into the description if not already present. This is
+ * need for Safari WebRTC, which errors when no supported video codec is found
+ * in the offer. Related bug reports:
+ * https://bugs.webkit.org/show_bug.cgi?id=173141
+ * https://bugs.chromium.org/p/webrtc/issues/detail?id=4957
+ *
+ * @param {RTCSessionDescription} description - An RTCSessionDescription
+ * to inject with an H264 payload.
+ * @private
+ * @returns {RTCSessionDescription}
+ */
+TraceablePeerConnection.prototype._injectH264IfNotPresent = function(
+        description) {
+    const parsedSdp = transform.parse(description.sdp);
+    const videoMLine = parsedSdp.media.find(m => m.type === 'video');
+
+    if (!videoMLine) {
+        logger.debug('No videoMLine found, no need to inject H264.');
+
+        return description;
+    }
+
+    if (videoMLine.rtp.some(rtp => rtp.codec.toLowerCase() === 'h264')) {
+        logger.debug('H264 codec found in video mLine, no need to inject.');
+
+        return description;
+    }
+
+    const { fmtp, payloads, rtp } = videoMLine;
+    const payloadsArray = payloads.toString().split(' ');
+    let dummyPayloadType;
+
+    for (let i = 127; i >= 96; i--) {
+        if (!payloadsArray.includes(i)) {
+            dummyPayloadType = i;
+            payloadsArray.push(i);
+            videoMLine.payloads = payloadsArray.join(' ');
+            break;
+        }
+    }
+
+    if (typeof dummyPayloadType === 'undefined') {
+        logger.error('Could not find valid payload type to inject.');
+
+        return description;
+    }
+
+    rtp.push({
+        codec: 'H264',
+        payload: dummyPayloadType,
+        rate: 90000
+    });
+
+    fmtp.push({
+        config: 'level-asymmetry-allowed=1;'
+            + 'packetization-mode=1;'
+            + 'profile-level-id=42e01f',
+        payload: dummyPayloadType
+    });
+
+    logger.debug(
+        `Injecting H264 payload type ${dummyPayloadType} into video mLine.`);
+
+    return new RTCSessionDescription({
+        type: description.type,
+        sdp: transform.write(parsedSdp)
+    });
 };
 
 /**
