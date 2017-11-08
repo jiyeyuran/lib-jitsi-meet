@@ -439,10 +439,11 @@ export default class JingleSessionPC extends JingleSession {
             case 'failed':
                 this.room.eventEmitter.emit(
                     XMPPEvents.CONNECTION_ICE_FAILED, this);
-                this.room.eventEmitter.emit(
-                    XMPPEvents.CONFERENCE_SETUP_FAILED,
-                    this,
-                    new Error('ICE fail'));
+
+                // this.room.eventEmitter.emit(
+                //     XMPPEvents.CONFERENCE_SETUP_FAILED,
+                //     this,
+                //     new Error('ICE fail'));
                 break;
             }
         };

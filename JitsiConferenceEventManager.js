@@ -290,7 +290,7 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
 
             conference.eventEmitter.emit(
                 JitsiConferenceEvents.MESSAGE_RECEIVED,
-                id, txt, ts);
+                id, displayName, txt, ts);
         });
 
     chatRoom.addListener(XMPPEvents.PRESENCE_STATUS,

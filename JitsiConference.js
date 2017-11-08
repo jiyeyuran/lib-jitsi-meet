@@ -562,9 +562,9 @@ JitsiConference.prototype.removeCommandListener = function(command) {
  * Sends text message to the other participants in the conference
  * @param message the text message.
  */
-JitsiConference.prototype.sendTextMessage = function(message) {
+JitsiConference.prototype.sendTextMessage = function(message, nick) {
     if (this.room) {
-        this.room.sendMessage(message);
+        this.room.sendMessage(message, nick);
     }
 };
 
