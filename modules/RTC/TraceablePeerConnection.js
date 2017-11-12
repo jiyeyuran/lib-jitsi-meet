@@ -124,11 +124,12 @@ export default function TraceablePeerConnection(
 
     /**
      * Keeps tracks of the WebRTC <tt>MediaStream</tt>s that have been added to
-     * the underlying WebRTC PeerConnection.
-     * @type {Set}
+     * the underlying WebRTC PeerConnection. An Array is used to avoid errors in
+     * IE11 with adding temasys MediaStream objects into other data structures.
+     * @type {Array}
      * @private
      */
-    this._addedStreams = new Set();
+    this._addedStreams = [];
 
     /**
      * @typedef {Object} TPCGroupInfo
@@ -1076,9 +1077,8 @@ const normalizePlanB = function(desc) {
  * @param {Object} localDescription the SDP object as defined by WebRTC.
  */
 const enforceSendRecv = function(localDescription) {
-    if (!localDescription
-        || !(localDescription instanceof RTCSessionDescription)) {
-        throw new Error('Incorrect type, expected RTCSessionDescription');
+    if (!localDescription) {
+        throw new Error('No local description passed in.');
     }
 
     const transformer = new SdpTransformWrap(localDescription.sdp);
@@ -1333,7 +1333,7 @@ TraceablePeerConnection.prototype.addTrackUnmute = function(track) {
  */
 TraceablePeerConnection.prototype._addStream = function(mediaStream) {
     this.peerconnection.addStream(mediaStream);
-    this._addedStreams.add(mediaStream);
+    this._addedStreams.push(mediaStream);
 };
 
 /**
@@ -1346,7 +1346,8 @@ TraceablePeerConnection.prototype._removeStream = function(mediaStream) {
     } else {
         this.peerconnection.removeStream(mediaStream);
     }
-    this._addedStreams.delete(mediaStream);
+    this._addedStreams
+        = this._addedStreams.filter(stream => stream !== mediaStream);
 };
 
 /**
@@ -1380,7 +1381,7 @@ TraceablePeerConnection.prototype._assertTrackBelongs = function(
  * @returns {boolean}
  */
 TraceablePeerConnection.prototype.isMediaStreamInPc = function(mediaStream) {
-    return this._addedStreams.has(mediaStream);
+    return this._addedStreams.indexOf(mediaStream) > -1;
 };
 
 /**
@@ -1780,7 +1781,7 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
 
     // Safari WebRTC errors when no supported video codec is found in the offer.
     // To prevent the error, inject H264 into the video mLine.
-    if (RTCBrowserType.usesNewGumFlow() && RTCBrowserType.isSafari()) {
+    if (RTCBrowserType.isSafariWithWebrtc()) {
         logger.debug('Maybe injecting H264 into the remote description');
 
         // eslint-disable-next-line no-param-reassign
@@ -1943,7 +1944,7 @@ TraceablePeerConnection.prototype.close = function() {
     }
     this.remoteTracks.clear();
 
-    this._addedStreams.clear();
+    this._addedStreams = [];
 
     if (!this.rtc._removePeerConnection(this)) {
         logger.error('RTC._removePeerConnection returned false');
@@ -2301,6 +2302,10 @@ TraceablePeerConnection.prototype.getStats = function(callback, errback) {
                 // Making sure that getStats won't fail if error callback is
                 // not passed.
             }));
+    } else if (RTCBrowserType.isSafariWithWebrtc()) {
+        // FIXME: Safari's native stats implementation is not compatibile with
+        // existing stats processing logic. Skip implementing stats for now to
+        // at least get native webrtc Safari available for use.
     } else {
         this.peerconnection.getStats(callback);
     }
