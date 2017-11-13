@@ -362,19 +362,7 @@ const ScreenObtainer = {
 
             return;
         }
-        const {
-            maxScreenFps,
-            desktopSharingChromeExtId,
-            desktopSharingChromeSources
-        } = this.options;
-
-        const gumOptions = {
-            maxScreenFps,
-            desktopSharingChromeExtId,
-            desktopSharingChromeSources:
-                options.desktopSharingSources
-                    || desktopSharingChromeSources
-        };
+        const gumOptions = this.options;
 
         if (chromeExtInstalled) {
             doGetStreamFromExtension(
@@ -640,9 +628,10 @@ function doGetStreamFromExtension(options, streamCallback, failCallback) {
 
                 return;
             }
-            response.maxScreenFps = options.maxScreenFps;
             logger.log('Response from extension: ', response);
-            onGetStreamResponse(response, streamCallback, failCallback);
+            const desktopOptions = Object.assign({}, options, response);
+
+            onGetStreamResponse(desktopOptions, streamCallback, failCallback);
         }
     );
 }
@@ -729,9 +718,11 @@ function waitForExtensionAfterInstall(options, waitInterval, retries) {
  * @param {Function} onFailure - callback for failure.
  */
 function onGetStreamResponse(
-        { streamId, streamType, maxScreenFps, error },
+        response,
         onSuccess,
         onFailure) {
+    const { streamId, streamType, error } = response;
+
     if (streamId) {
         gumFunction(
             [ 'desktop' ],
@@ -742,8 +733,8 @@ function onGetStreamResponse(
             }),
             onFailure,
             {
-                desktopStream: streamId,
-                maxScreenFps
+                ...response,
+                desktopStream: streamId
             });
     } else {
         // As noted in Chrome Desktop Capture API:

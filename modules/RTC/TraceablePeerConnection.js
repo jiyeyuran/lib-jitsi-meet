@@ -9,7 +9,6 @@ import * as MediaType from '../../service/RTC/MediaType';
 import LocalSdpMunger from './LocalSdpMunger';
 import RTC from './RTC';
 import RTCUtils from './RTCUtils';
-import BandwidthHandler from './BandwidthHandler';
 import RTCBrowserType from './RTCBrowserType';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import RtxModifier from '../xmpp/RtxModifier';
@@ -1742,10 +1741,6 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
             type: description.type,
             sdp: transform.write(parsedSdp)
         });
-    }
-    if (this.options.bandwidth) {
-        description.sdp = BandwidthHandler.setBandwidth(
-            description.sdp, this.options.bandwidth);
     }
 
     // If the browser uses unified plan, transform to it first

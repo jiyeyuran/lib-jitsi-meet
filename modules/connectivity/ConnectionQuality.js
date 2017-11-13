@@ -75,7 +75,7 @@ function getTarget(simulcast, resolution, millisSinceStart) {
     // Completely ignore the bitrate in the first 5 seconds, as the first
     // event seems to fire very early and the value is suspicious and causes
     // false positives.
-    if (millisSinceStart < 5000) {
+    if (millisSinceStart < 3000) {
         return 1;
     }
 
@@ -102,27 +102,22 @@ function getTarget(simulcast, resolution, millisSinceStart) {
             }
         }
     } else {
-        if (config) {
-            const bandwidth = config.p2p && config.p2p.bandwidth;
-
-            if (bandwidth) {
-                return typeof bandwidth === 'number'
-                    ? bandwidth : bandwidth.video;
-            }
-        }
-
         // See GetMaxDefaultVideoBitrateKbps in
         // media/engine/webrtcvideoengine2.cc from webrtc.org
         const pixels = resolution.width * resolution.height;
 
         if (pixels <= 320 * 240) {
-            target = 600;
+            // target = 600;
+            target = 200;
         } else if (pixels <= 640 * 480) {
-            target = 1700;
+            // target = 1700;
+            target = 400;
         } else if (pixels <= 960 * 540) {
-            target = 2000;
+            // target = 2000;
+            target = 800;
         } else {
-            target = 2500;
+            // target = 2500;
+            target = 1200;
         }
     }
 

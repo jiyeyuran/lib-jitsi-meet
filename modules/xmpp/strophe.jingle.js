@@ -38,6 +38,8 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         if (Array.isArray(p2pStunServers)) {
             logger.info('Configured STUN servers: ', p2pStunServers);
             this.p2pIceConfig.iceServers = p2pStunServers;
+            this.p2pIceConfig.iceTransports
+                = xmpp.options.p2p.iceTransportPolicy;
             this.p2pIceConfig.iceTransportPolicy
                 = xmpp.options.p2p.iceTransportPolicy;
         }

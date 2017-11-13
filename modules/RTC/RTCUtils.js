@@ -335,7 +335,7 @@ function getConstraints(um, options) {
             constraints.video = { mandatory: {},
                 optional: [] };
         }
-        constraints.video.optional.push({ bandwidth: options.bandwidth });
+        constraints.video.optional.push({ bandwidth: options.bandwidth.video });
     }
 
     // we turn audio for both audio and video tracks, the fake audio & video
