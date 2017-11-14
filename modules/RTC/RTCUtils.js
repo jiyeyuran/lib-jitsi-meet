@@ -908,7 +908,7 @@ class RTCUtils extends Listenable {
                 };
                 this.getStreamID = stream => stream.id;
                 this.getTrackID = track => track.id;
-            } else if (RTCBrowserType.isChrome()
+            } else if (RTCBrowserType.isChrome() // this is chrome < 61
                     || RTCBrowserType.isOpera()
                     || RTCBrowserType.isNWJS()
                     || RTCBrowserType.isElectron()
