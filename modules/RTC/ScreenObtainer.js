@@ -372,9 +372,7 @@ const ScreenObtainer = {
         } else {
             if (chromeExtUpdateRequired) {
                 /* eslint-disable no-alert */
-                alert(
-                    'Jhmeeting Desktop Streamer requires update. '
-                    + 'Changes will take effect after next Chrome restart.');
+                alert('简会桌面插件需要更新。');
 
                 /* eslint-enable no-alert */
             }

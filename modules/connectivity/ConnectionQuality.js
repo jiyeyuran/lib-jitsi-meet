@@ -1,5 +1,3 @@
-/* global config */
-
 import * as ConnectionQualityEvents
     from '../../service/connectivity/ConnectionQualityEvents';
 import * as ConferenceEvents from '../../JitsiConferenceEvents';
@@ -111,10 +109,10 @@ function getTarget(simulcast, resolution, millisSinceStart) {
             target = 200;
         } else if (pixels <= 640 * 480) {
             // target = 1700;
-            target = 400;
+            target = 500;
         } else if (pixels <= 960 * 540) {
             // target = 2000;
-            target = 800;
+            target = 900;
         } else {
             // target = 2500;
             target = 1200;
@@ -367,7 +365,7 @@ export default class ConnectionQuality {
 
         // Make sure that the quality doesn't climb quickly
         if (this._lastConnectionQualityUpdate > 0) {
-            const maxIncreasePerSecond = 2;
+            const maxIncreasePerSecond = 5;
             const prevConnectionQuality = this._localStats.connectionQuality;
             const diffSeconds
                 = (window.performance.now() - this._lastConnectionQualityUpdate)
@@ -444,7 +442,6 @@ export default class ConnectionQuality {
             return;
         }
 
-        let key;
         const updateLocalConnectionQuality
             = !this._conference.isConnectionInterrupted();
         const localVideoTrack
@@ -458,12 +455,7 @@ export default class ConnectionQuality {
             this._maybeUpdateUnmuteTime();
         }
 
-        // Copy the fields already in 'data'.
-        for (key in data) {
-            if (data.hasOwnProperty(key)) {
-                this._localStats[key] = data[key];
-            }
-        }
+        Object.assign(this._localStats, data);
 
         // And re-calculate the connectionQuality field.
         if (updateLocalConnectionQuality) {
