@@ -303,8 +303,7 @@ function getConstraints(um, options) {
             };
         } else if (RTCBrowserType.isFirefox()) {
             constraints.video = {
-                mozMediaSource: 'window',
-                mediaSource: 'window'
+                mediaSource: [ 'window' ]
             };
 
         } else {

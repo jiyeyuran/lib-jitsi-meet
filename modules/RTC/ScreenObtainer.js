@@ -229,7 +229,7 @@ const ScreenObtainer = {
 
             initFirefoxExtensionDetection(options);
 
-            return this.obtainScreenOnFirefox;
+            return obtainWebRTCScreen;
         }
 
         logger.log(

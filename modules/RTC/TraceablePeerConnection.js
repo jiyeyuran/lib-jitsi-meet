@@ -324,6 +324,19 @@ const dumpSDP = function(description) {
     return `type: ${description.type}\r\n${description.sdp}`;
 };
 
+/**
+ * Set bitrate on sending side.
+ *
+ * @param {int} min the minimum birate.
+ * @param {int} target the target birate.
+ * @param {int} max the maximum bitrate.
+ * @return {boolean}
+ */
+TraceablePeerConnection.prototype.setBirate = function(min, target, max) {
+    if (typeof this.peerconnection.setBirate === 'function') {
+        return this.peerconnection.setBirate(min, target, max);
+    }
+};
 
 /**
  * Forwards the {@link peerconnection.iceConnectionState} state except that it
