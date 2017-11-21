@@ -121,7 +121,9 @@ function initRawEnumerateDevicesWithCallback() {
 // 'devicechange' event can be found in spec -
 // http://w3c.github.io/mediacapture-main/#event-mediadevices-devicechange
 // TODO: check MS Edge
-const isDeviceChangeEventSupported = false;
+const isDeviceChangeEventSupported
+    = RTCBrowserType.getChromeVersion() > 57
+        || RTCBrowserType.getFirefoxVersion() > 51;
 
 let rtcReady = false;
 
@@ -686,54 +688,29 @@ function convertMediaStreamTrackSource(source) {
  * @returns {*[]} object that describes the new streams
  */
 function handleLocalStream(streams, resolution) {
-    let audioStream, desktopStream, videoStream;
+    let audioStream, videoStream;
+    const desktopStream = streams.desktop;
+    const audioVideo = streams.audioVideo;
     const res = [];
 
-    // XXX The function obtainAudioAndVideoPermissions has examined the type of
-    // the browser, its capabilities, etc. and has taken the decision whether to
-    // invoke getUserMedia per device (e.g. Firefox) or once for both audio and
-    // video (e.g. Chrome). In order to not duplicate the logic here, examine
-    // the specified streams and figure out what we've received based on
-    // obtainAudioAndVideoPermissions' decision.
-    if (streams) {
-        // As mentioned above, certian types of browser (e.g. Chrome) support
-        // (with a result which meets our requirements expressed bellow) calling
-        // getUserMedia once for both audio and video.
-        const audioVideo = streams.audioVideo;
+    if (audioVideo) {
+        const NativeMediaStream
+        = window.webkitMediaStream || window.MediaStream;
+        const audioTracks = audioVideo.getAudioTracks();
+        const videoTracks = audioVideo.getVideoTracks();
 
-        if (audioVideo) {
-            const NativeMediaStream
-                 = window.webkitMediaStream || window.MediaStream;
-            const audioTracks = audioVideo.getAudioTracks();
-
-            if (audioTracks.length) {
-                // eslint-disable-next-line new-cap
-                audioStream = new NativeMediaStream();
-                for (let i = 0; i < audioTracks.length; i++) {
-                    audioStream.addTrack(audioTracks[i]);
-                }
-            }
-
-            const videoTracks = audioVideo.getVideoTracks();
-
-            if (videoTracks.length) {
-                // eslint-disable-next-line new-cap
-                videoStream = new NativeMediaStream();
-                for (let j = 0; j < videoTracks.length; j++) {
-                    videoStream.addTrack(videoTracks[j]);
-                }
-            }
-        } else {
-            // On other types of browser (e.g. Firefox) we choose (namely,
-            // obtainAudioAndVideoPermissions) to call getUserMedia per device
-            // (type).
-            audioStream = streams.audio;
-            videoStream = streams.video;
+        if (audioTracks.length) {
+            audioStream = new NativeMediaStream();
+            audioTracks.map(track => audioStream.addTrack(track));
         }
-
-        desktopStream = streams.desktop;
+        if (videoTracks.length) {
+            videoStream = new NativeMediaStream();
+            videoTracks.map(track => videoStream.addTrack(track));
+        }
+    } else {
+        audioStream = streams.audio;
+        videoStream = streams.video;
     }
-
     if (desktopStream) {
         const { stream, sourceId, sourceType } = desktopStream;
 
@@ -1262,17 +1239,9 @@ class RTCUtils extends Listenable {
      * @param {Object} [options] optional parameters
      * @param {Array} options.devices the devices that will be requested
      * @param {string} options.resolution resolution constraints
-     * @param {bool} options.dontCreateJitsiTrack if <tt>true</tt> objects with
-     * the following structure {stream: the Media Stream, type: "audio" or
-     * "video", videoType: "camera" or "desktop"} will be returned trough the
-     * Promise, otherwise JitsiTrack objects will be returned.
-     * @param {string} options.cameraDeviceId
-     * @param {string} options.micDeviceId
      * @returns {*} Promise object that will receive the new JitsiTracks
      */
     obtainAudioAndVideoPermissions(options = {}) {
-        const self = this;
-
         const dsOptions = {
             ...options.desktopSharingExtensionExternalInstallation,
             desktopSharingSources: options.desktopSharingSources
@@ -1284,35 +1253,40 @@ class RTCUtils extends Listenable {
             };
 
             options.devices = options.devices || [ 'audio', 'video' ];
-            options.resolution = options.resolution || '360';
+            const hasDesktop = options.devices.includes('desktop');
 
-            if (!screenObtainer.isSupported()
-                && options.devices.indexOf('desktop') !== -1) {
+            options.devices = options.devices.filter(e => e !== 'desktop');
+            options.resolution = options.resolution || '360';
+            const streams = {};
+
+            if (!screenObtainer.isSupported() && hasDesktop) {
                 reject(new Error('Desktop sharing is not supported!'));
+
+                return;
+            }
+            if (hasDesktop && !options.devices.length) {
+                screenObtainer.obtainStream(
+                    dsOptions,
+                    desktop => successCallback({ desktop }),
+                    error => reject(error));
+
+                return;
             }
             if (RTCBrowserType.isFirefox()
-
-                    // XXX The react-native-webrtc implementation that we
-                    // utilize on React Native at the time of this writing does
-                    // not support the MediaStream constructors defined by
-                    // https://www.w3.org/TR/mediacapture-streams/#constructors
-                    // and instead has a single constructor which expects (an
-                    // NSNumber as) a MediaStream ID.
                     || RTCBrowserType.isReactNative()
                     || RTCBrowserType.isTemasysPluginUsed()) {
-                const GUM = function(device, s, e) {
-                    this.getUserMediaWithConstraints(device, s, e, options);
+                const GUM = function(device, streamCallback, error) {
+                    this.getUserMediaWithConstraints(
+                        device, streamCallback, error, options);
                 };
-
                 const deviceGUM = {
-                    'audio': GUM.bind(self, [ 'audio' ]),
-                    'video': GUM.bind(self, [ 'video' ])
+                    'audio': GUM.bind(this, [ 'audio' ]),
+                    'video': GUM.bind(this, [ 'video' ])
                 };
 
-                if (screenObtainer.isSupported()) {
+                if (hasDesktop) {
                     deviceGUM.desktop = screenObtainer.obtainStream.bind(
-                        screenObtainer,
-                        dsOptions);
+                        screenObtainer, dsOptions);
                 }
 
                 // With FF/IE we can't split the stream into audio and video
@@ -1325,111 +1299,30 @@ class RTCUtils extends Listenable {
                 // it to the successCallback method.
                 obtainDevices({
                     devices: options.devices,
-                    streams: [],
+                    streams,
                     successCallback,
                     errorCallback: reject,
                     deviceGUM
                 });
             } else {
-                const hasDesktop = options.devices.indexOf('desktop') > -1;
-
-                if (hasDesktop) {
-                    options.devices.splice(
-                        options.devices.indexOf('desktop'),
-                        1);
-                }
-
-                if (options.devices.length) {
-                    this.getUserMediaWithConstraints(
-                        options.devices,
-                        stream => {
-                            const audioDeviceRequested
-                                = options.devices.indexOf('audio') !== -1;
-                            const videoDeviceRequested
-                                = options.devices.indexOf('video') !== -1;
-                            const audioTracksReceived
-                                = stream.getAudioTracks().length > 0;
-                            const videoTracksReceived
-                                = stream.getVideoTracks().length > 0;
-
-                            if ((audioDeviceRequested && !audioTracksReceived)
-                                    || (videoDeviceRequested
-                                        && !videoTracksReceived)) {
-                                self.stopMediaStream(stream);
-
-                                // We are getting here in case if we requested
-                                // 'audio' or 'video' devices or both, but
-                                // didn't get corresponding MediaStreamTrack in
-                                // response stream. We don't know the reason why
-                                // this happened, so reject with general error.
-                                // eslint-disable-next-line no-shadow
-                                const devices = [];
-
-                                if (audioDeviceRequested
-                                        && !audioTracksReceived) {
-                                    devices.push('audio');
-                                }
-
-                                if (videoDeviceRequested
-                                        && !videoTracksReceived) {
-                                    devices.push('video');
-                                }
-
-                                // we are missing one of the media we requested
-                                // in order to get the actual error that caused
-                                // this missing media we will call one more time
-                                // getUserMedia so we can obtain the actual
-                                // error (Example usecases are requesting
-                                // audio and video and video device is missing
-                                // or device is denied to be used and chrome is
-                                // set to not ask for permissions)
-                                self.getUserMediaWithConstraints(
-                                    devices,
-                                    () => {
-                                        // we already failed to obtain this
-                                        // media, so we are not supposed in any
-                                        // way to receive success for this call
-                                        // any way we will throw an error to be
-                                        // sure the promise will finish
-                                        reject(new JitsiTrackError(
-                                            { name: 'UnknownError' },
-                                            getConstraints(
-                                                options.devices,
-                                                options),
-                                            devices)
-                                        );
-                                    },
-                                    error => {
-                                        // rejects with real error for not
-                                        // obtaining the media
-                                        reject(error);
-                                    }, options);
-
-                                return;
-                            }
-                            if (hasDesktop) {
-                                screenObtainer.obtainStream(
-                                    dsOptions,
-                                    desktop => {
-                                        successCallback({ audioVideo: stream,
-                                            desktop });
-                                    }, error => {
-                                        self.stopMediaStream(stream);
-
-                                        reject(error);
-                                    });
-                            } else {
-                                successCallback({ audioVideo: stream });
-                            }
-                        },
-                        error => reject(error),
-                        options);
-                } else if (hasDesktop) {
-                    screenObtainer.obtainStream(
-                        dsOptions,
-                        desktop => successCallback({ desktop }),
-                        error => reject(error));
-                }
+                this.getUserMediaWithConstraints(
+                    options.devices,
+                    stream => {
+                        streams.audioVideo = stream;
+                        if (hasDesktop) {
+                            screenObtainer.obtainStream(
+                                dsOptions,
+                                desktop => {
+                                    streams.desktop = desktop;
+                                    successCallback(streams);
+                                },
+                                () => successCallback(streams));
+                        } else {
+                            successCallback(streams);
+                        }
+                    },
+                    error => reject(error),
+                    options);
             }
         });
     }
@@ -1830,12 +1723,10 @@ function obtainDevices(options) {
             obtainDevices(options);
         },
         error => {
-            Object.keys(options.streams).forEach(
-                d => rtcUtils.stopMediaStream(options.streams[d]));
             logger.error(
                 `failed to obtain ${device} stream - stop`, error);
 
-            options.errorCallback(error);
+            obtainDevices(options);
         });
 }
 
@@ -1862,9 +1753,9 @@ function onReady(options, GUM) {
                 currentlyAvailableMediaDevices);
 
             if (isDeviceChangeEventSupported) {
-                navigator.mediaDevices.addEventListener(
-                    'devicechange',
-                    () => rtcUtils.enumerateDevices(onMediaDevicesListChanged));
+                navigator.mediaDevices.ondevicechange = () => {
+                    rtcUtils.enumerateDevices(onMediaDevicesListChanged);
+                };
             } else {
                 pollForAvailableMediaDevices();
             }

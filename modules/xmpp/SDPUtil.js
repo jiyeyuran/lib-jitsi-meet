@@ -699,8 +699,16 @@ const SDPUtil = {
                 `a=mid:audio\r\nb=${modifier}:${bandwidth.audio}\r\n`);
         }
         if (bandwidth.video) {
+            const b = bandwidth.video;
+
             workingSdp = workingSdp.replace(/a=mid:video\r\n/g,
-                `a=mid:video\r\nb=${modifier}:${bandwidth.video}\r\n`);
+                `a=mid:video\r\nb=${modifier}:${b}\r\n`);
+            workingSdp = workingSdp.replace(
+                /x-google-max-bitrate=\d+ x-google-max-bitrate=\d+ {0,}/g,
+                '');
+            workingSdp = workingSdp.replace(
+                /x-google-start-bitrate=([0-9]+)/g,
+                `x-google-start-bitrate=$1 x-google-max-bitrate=${b}`);
         }
 
         return workingSdp;

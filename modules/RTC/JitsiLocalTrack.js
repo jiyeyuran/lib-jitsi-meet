@@ -380,12 +380,9 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
             promise.then(streamsInfo => {
                 const mediaType = this.getType();
-                const streamInfo
-                    = RTCBrowserType.usesNewGumFlow()
-                        ? streamsInfo.find(
-                            info => info.track.kind === mediaType)
-                        : streamsInfo.find(
-                            info => info.mediaType === mediaType);
+                const streamInfo = streamsInfo.find(
+                        info => info.track.kind === mediaType
+                            || info.mediaType === mediaType);
 
                 if (streamInfo) {
                     this._setStream(streamInfo.stream);

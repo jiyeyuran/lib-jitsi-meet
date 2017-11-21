@@ -279,9 +279,9 @@ export default class JingleSessionPC extends JingleSession {
                     this.isP2P,
                     pcOptions);
 
-        if (this.bandwidth) {
-            this.peerconnection.setBitrate(0, this.bandwidth.video);
-        }
+        // if (this.bandwidth && this.peerconnection.setBitrate) {
+        //     this.peerconnection.setBitrate(0, this.bandwidth.video);
+        // }
         this.peerconnection.onicecandidate = ev => {
             if (!ev) {
                 // There was an incomplete check for ev before which left

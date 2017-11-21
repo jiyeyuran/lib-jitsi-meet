@@ -195,8 +195,8 @@ export default class ConnectionQuality {
 
 
         // We assume a global startBitrate value for the sake of simplicity.
-        if (options.startBitrate && options.startBitrate > 0) {
-            startBitrate = options.startBitrate;
+        if (options.config && options.config.startBitrate) {
+            startBitrate = options.config.startBitrate;
         }
 
         // TODO: consider ignoring these events and letting the user of

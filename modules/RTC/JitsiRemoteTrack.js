@@ -82,7 +82,17 @@ export default class JitsiRemoteTrack extends JitsiTrack {
      * @returns {void}
      */
     _bindMuteHandlers() {
-        this._onTrackUnmute('track_mute', () => this._onTrackMute());
+        // Use feature detection for finding what event handling function is
+        // supported. On Internet Explorer, which uses uses temasys/firebreath,
+        // the track will have attachEvent instead of addEventListener.
+        //
+        // FIXME it would be better to use recently added '_setHandler' method,
+        // but:
+        // 1. It does not allow to set more than one handler to the event
+        // 2. It does mix MediaStream('inactive') with MediaStreamTrack events
+        // 3. Allowing to bind more than one event handler requires too much
+        //    refactoring around camera issues detection.
+        this._setHandler('track_mute', () => this._onTrackMute());
         this._setHandler('track_unmute', () => this._onTrackUnmute());
     }
 

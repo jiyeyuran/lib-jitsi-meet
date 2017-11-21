@@ -139,6 +139,20 @@ const RTCBrowserType = {
     },
 
     /**
+     * Checks if current environment is mobile.
+     * @returns {boolean}
+     */
+    isMobile() {
+        return navigator.userAgent.match(/Android/i)
+            || navigator.userAgent.match(/webOS/i)
+            || navigator.userAgent.match(/iPhone/i)
+            || navigator.userAgent.match(/iPad/i)
+            || navigator.userAgent.match(/iPod/i)
+            || navigator.userAgent.match(/BlackBerry/i)
+            || navigator.userAgent.match(/Windows Phone/i);
+    },
+
+    /**
      * Check whether or not the current browser support peer to peer connections
      * @return {boolean} <tt>true</tt> if p2p is supported or <tt>false</tt>
      * otherwise.
@@ -184,7 +198,6 @@ const RTCBrowserType = {
                 && RTCBrowserType.getChromeVersion() >= 61)
             || RTCBrowserType.isFirefox()
             || RTCBrowserType.isSafariWithWebrtc();
-
     },
 
     /**

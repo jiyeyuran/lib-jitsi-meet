@@ -149,17 +149,19 @@ export default class XMPP extends Listenable {
             logger.info(`My Jabber ID: ${this.connection.jid}`);
 
             // Schedule ping ?
-            const pingJid = this.connection.domain;
+            if (this.options.enablePing) {
+                const pingJid = this.connection.domain;
 
-            this.connection.ping.hasPingSupport(
-                pingJid,
-                hasPing => {
-                    if (hasPing) {
-                        this.connection.ping.startInterval(pingJid);
-                    } else {
-                        logger.warn(`Ping NOT supported by ${pingJid}`);
-                    }
-                });
+                this.connection.ping.hasPingSupport(
+                    pingJid,
+                    hasPing => {
+                        if (hasPing) {
+                            this.connection.ping.startInterval(pingJid);
+                        } else {
+                            logger.warn(`Ping NOT supported by ${pingJid}`);
+                        }
+                    });
+            }
 
             if (credentials.password) {
                 this.authenticatedUser = true;

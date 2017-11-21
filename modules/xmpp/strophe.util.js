@@ -56,10 +56,10 @@ export default function() {
         // level here to a warning.
         // logger.trace('Strophe', level, msg);
         if (typeof msg === 'string'
-                && msg.indexOf('Request ') !== -1
-                && msg.indexOf('timed out (secondary), restarting') !== -1) {
+                && msg.toLowerCase().indexOf('request ') !== -1) {
             // eslint-disable-next-line no-param-reassign
-            level = Strophe.LogLevel.WARN;
+            // level = Strophe.LogLevel.WARN;
+            return;
         }
 
         /* eslint-disable no-case-declarations */

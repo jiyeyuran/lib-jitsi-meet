@@ -1620,8 +1620,10 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
 
         if (this.options.disableH264) {
             SDPUtil.stripVideoCodec(videoMLine, 'h264');
-        } else {
+        } else if (this.options.preferH264 === true) {
             SDPUtil.preferVideoCodec(videoMLine, 'h264');
+        } else {
+            SDPUtil.preferVideoCodec(videoMLine, this.options.preferH264);
         }
 
         localSdp = new RTCSessionDescription({
@@ -1747,7 +1749,11 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
         const parsedSdp = transform.parse(description.sdp);
         const videoMLine = parsedSdp.media.find(m => m.type === 'video');
 
-        SDPUtil.preferVideoCodec(videoMLine, 'h264');
+        if (this.options.preferH264 === true) {
+            SDPUtil.preferVideoCodec(videoMLine, 'h264');
+        } else {
+            SDPUtil.preferVideoCodec(videoMLine, this.options.preferH264);
+        }
 
         // eslint-disable-next-line no-param-reassign
         description = new RTCSessionDescription({
