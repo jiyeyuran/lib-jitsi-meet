@@ -34,11 +34,14 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.xmpp = xmpp;
         this.eventEmitter = eventEmitter;
         this.sessions = {};
-        this.jvbIceConfig = { iceServers: [ ] };
         this.p2pIceConfig = { iceServers: [ ] };
         if (Array.isArray(p2pStunServers)) {
             logger.info('Configured STUN servers: ', p2pStunServers);
             this.p2pIceConfig.iceServers = p2pStunServers;
+            this.p2pIceConfig.iceTransports
+                = xmpp.options.p2p.iceTransportPolicy;
+            this.p2pIceConfig.iceTransportPolicy
+                = xmpp.options.p2p.iceTransportPolicy;
         }
         this.mediaConstraints = {
             mandatory: {
@@ -160,7 +163,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                     fromJid,
                     this.connection,
                     this.mediaConstraints,
-                    isP2P ? this.p2pIceConfig : this.jvbIceConfig,
+                    this.p2pIceConfig,
                     isP2P,
                     /* initiator */ false,
                     this.xmpp.options);

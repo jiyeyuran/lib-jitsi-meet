@@ -158,7 +158,8 @@ Recording.prototype.handleJibriPresence = function(jibri) {
         this.state = newState;
     }
 
-    this.eventEmitter.emit(XMPPEvents.RECORDER_STATE_CHANGED, this.state);
+    this.eventEmitter.emit(
+        XMPPEvents.RECORDER_STATE_CHANGED, this.state, errorDetails);
 };
 
 /* eslint-disable max-params */
@@ -191,7 +192,8 @@ Recording.prototype.setRecordingJibri = function(
                 'streamid':
                     this.type === Recording.types.JIBRI
                         ? options.streamId
-                        : undefined
+                        : undefined,
+                'displayname': options.displayname
             })
             .up();
 

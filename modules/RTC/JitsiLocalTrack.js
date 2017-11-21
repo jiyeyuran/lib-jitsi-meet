@@ -346,10 +346,6 @@ export default class JitsiLocalTrack extends JitsiTrack {
                 logMuteInfo();
                 this._removeStreamFromConferenceAsMute(
                     () => {
-                        // FIXME: Maybe here we should set the SRC for the
-                        // containers to something
-                        // We don't want any events to be fired on this stream
-                        this._unregisterHandlers();
                         this._stopStream();
                         this._setStream(null);
                         resolve();
@@ -586,13 +582,10 @@ export default class JitsiLocalTrack extends JitsiTrack {
         if (bytesSent > 0) {
             this._hasSentData = true;
         }
-        const iceConnectionState = tpc.getConnectionState();
-
-        if (this._testDataSent && iceConnectionState === 'connected') {
+        if (this._testDataSent && tpc.getConnectionState() === 'connected') {
             setTimeout(() => {
                 if (!this._hasSentData) {
-                    logger.warn(`${this} 'bytes sent' <= 0: \
-                        ${this._bytesSent}`);
+                    logger.warn(`${this} 'bytes sent' == 0`);
 
                     // we are not receiving anything from the microphone
                     this._fireNoDataFromSourceEvent();

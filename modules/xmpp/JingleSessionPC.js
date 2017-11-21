@@ -251,6 +251,8 @@ export default class JingleSessionPC extends JingleSession {
                 = this.room.options.p2p && this.room.options.p2p.disableH264;
             pcOptions.preferH264
                 = this.room.options.p2p && this.room.options.p2p.preferH264;
+            this.bandwidth
+                = this.room.options.p2p && this.room.options.p2p.bandwidth;
 
             const abtestSuspendVideo = this._abtestSuspendVideoEnabled();
 
@@ -267,6 +269,7 @@ export default class JingleSessionPC extends JingleSession {
             pcOptions.enableFirefoxSimulcast
                 = this.room.options.testing
                     && this.room.options.testing.enableFirefoxSimulcast;
+            this.bandwidth = this.room.options.bandwidth;
         }
 
         this.peerconnection
@@ -436,10 +439,11 @@ export default class JingleSessionPC extends JingleSession {
             case 'failed':
                 this.room.eventEmitter.emit(
                     XMPPEvents.CONNECTION_ICE_FAILED, this);
-                this.room.eventEmitter.emit(
-                    XMPPEvents.CONFERENCE_SETUP_FAILED,
-                    this,
-                    new Error('ICE fail'));
+
+                // this.room.eventEmitter.emit(
+                //     XMPPEvents.CONFERENCE_SETUP_FAILED,
+                //     this,
+                //     new Error('ICE fail'));
                 break;
             }
         };
@@ -1456,13 +1460,17 @@ export default class JingleSessionPC extends JingleSession {
      *  rejects with an error {string}
      */
     _renegotiate(optionalRemoteSdp) {
-        const remoteSdp
+        let remoteSdp
             = optionalRemoteSdp || this.peerconnection.remoteDescription.sdp;
 
         if (!remoteSdp) {
             return Promise.reject(
                 'Can not renegotiate without remote description,'
                     + `- current state: ${this.state}`);
+        }
+
+        if (this.bandwidth) {
+            remoteSdp = SDPUtil.setBandwidth(remoteSdp, this.bandwidth);
         }
 
         const remoteDescription = new RTCSessionDescription({

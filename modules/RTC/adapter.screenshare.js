@@ -65,12 +65,12 @@ AdapterJS.WebRTCPlugin.pluginInfo = AdapterJS.WebRTCPlugin.pluginInfo || {
   pluginId : 'plugin0',
   type : 'application/x-temwebrtcplugin',
   onload : '__TemWebRTCReady0',
-  portalLink : 'http://skylink.io/plugin/',
+  portalLink : '',
   downloadLink : null, //set below
   companyName: 'Temasys',
   downloadLinks : {
-    mac: 'http://bit.ly/webrtcpluginpkg',
-    win: 'http://bit.ly/webrtcpluginmsi'
+    mac: 'https://cos.jhmeeting.com/room/TemWebRTCPlugin.pkg',
+    win: 'https://cos.jhmeeting.com/room/TemWebRTCPlugin.msi'
   }
 };
 if(typeof AdapterJS.WebRTCPlugin.pluginInfo.downloadLinks !== "undefined" && AdapterJS.WebRTCPlugin.pluginInfo.downloadLinks !== null) {
@@ -168,7 +168,7 @@ AdapterJS.WebRTCPlugin.callWhenPluginReady = null;
 // TemPluginLoaded function might be called on Chrome/Firefox.
 // This function is the only private function that is not encapsulated to
 // allow the plugin method to be called.
-__TemWebRTCReady0 = function () {
+window.__TemWebRTCReady0 = function () {
   if (document.readyState === 'complete') {
     AdapterJS.WebRTCPlugin.pluginState = AdapterJS.WebRTCPlugin.PLUGIN_STATES.READY;
     AdapterJS.maybeThroughWebRTCReady();
@@ -205,14 +205,13 @@ AdapterJS.maybeThroughWebRTCReady = function() {
 // Text namespace
 AdapterJS.TEXT = {
   PLUGIN: {
-    REQUIRE_INSTALLATION: 'This website requires you to install a WebRTC-enabling plugin ' +
-      'to work on this browser.',
-    NOT_SUPPORTED: 'Your browser does not support WebRTC.',
-    BUTTON: 'Install Now'
+    REQUIRE_INSTALLATION: '简会需要当前浏览器安装WebRTC插件才能正常运行，建议使用Chrome或Firefox。',
+    NOT_SUPPORTED: '您的浏览器不支持WebRTC技术。',
+    BUTTON: '立即安装'
   },
   REFRESH: {
-    REQUIRE_REFRESH: 'Please refresh page',
-    BUTTON: 'Refresh Page'
+    REQUIRE_REFRESH: '请刷新页面',
+    BUTTON: '刷新'
   }
 };
 
@@ -492,13 +491,13 @@ AdapterJS.renderNotificationBar = function (text, buttonText, buttonLink, openNe
 // - 'moz': Mozilla implementation of webRTC.
 // - 'webkit': WebKit implementation of webRTC.
 // - 'plugin': Using the plugin implementation.
-webrtcDetectedType = null;
+var webrtcDetectedType = null;
 
 // Set the settings for creating DataChannels, MediaStream for
 // Cross-browser compability.
 // - This is only for SCTP based support browsers.
 // the 'urls' attribute.
-checkMediaDataChannelSettings =
+var checkMediaDataChannelSettings =
   function (peerBrowserAgent, peerBrowserVersion, callback, constraints) {
   if (typeof callback !== 'function') {
     return;
@@ -547,7 +546,7 @@ checkMediaDataChannelSettings =
 //   - Chrome (answerer) : 'checking' > 'connected'
 //   - Firefox (offerer) : 'checking' > 'connected'
 //   - Firefox (answerer): 'checking' > 'connected'
-checkIceConnectionState = function (peerId, iceConnectionState, callback) {
+var checkIceConnectionState = function (peerId, iceConnectionState, callback) {
   if (typeof callback !== 'function') {
     console.warn('No callback specified in checkIceConnectionState. Aborted.');
     return;
@@ -592,7 +591,7 @@ checkIceConnectionState = function (peerId, iceConnectionState, callback) {
 //   - If Stun - Create iceServer with stun url.
 //   - Else - Create iceServer with turn url
 //   - This is a WebRTC Function
-createIceServer = null;
+var createIceServer = null;
 
 // Firefox:
 // - Creates IceServers for Firefox
@@ -606,30 +605,34 @@ createIceServer = null;
 // - Creates Ice Servers for Plugin Browsers
 //   - Multiple Urls support
 //   - This is a WebRTC Function
-createIceServers = null;
+var createIceServers = null;
+
 //------------------------------------------------------------
 
 //The RTCPeerConnection object.
-RTCPeerConnection = null;
+var RTCPeerConnection = null;
 
 // Creates RTCSessionDescription object for Plugin Browsers
-RTCSessionDescription = (typeof RTCSessionDescription === 'function') ?
+var RTCSessionDescription = (typeof RTCSessionDescription === 'function') ?
   RTCSessionDescription : null;
 
 // Creates RTCIceCandidate object for Plugin Browsers
-RTCIceCandidate = (typeof RTCIceCandidate === 'function') ?
+var RTCIceCandidate = (typeof RTCIceCandidate === 'function') ?
   RTCIceCandidate : null;
 
 // Get UserMedia (only difference is the prefix).
 // Code from Adam Barth.
-getUserMedia = null;
+var getUserMedia = null;
 
 // Attach a media stream to an element.
-attachMediaStream = null;
+var attachMediaStream = null;
 
 // Re-attach a media stream to an element.
-reattachMediaStream = null;
+var reattachMediaStream = null;
 
+var MediaStreamTrack = null;
+
+var requestUserMedia = null;
 
 // Detected browser agent name. Types are:
 // - 'firefox': Firefox browser.
@@ -637,13 +640,18 @@ reattachMediaStream = null;
 // - 'opera': Opera browser.
 // - 'safari': Safari browser.
 // - 'IE' - Internet Explorer browser.
-webrtcDetectedBrowser = null;
+var webrtcDetectedBrowser = null;
 
 // Detected browser version.
-webrtcDetectedVersion = null;
+var webrtcDetectedVersion = null;
 
 // The minimum browser version still supported by AJS.
-webrtcMinimumVersion  = null;
+var webrtcMinimumVersion  = null;
+
+// WebRTC data channel support stcp or rtp
+var webrtcDetectedDCSupport = null;
+
+var isIE = null;
 
 // Check for browser types and react accordingly
 if ( (navigator.mozGetUserMedia ||
@@ -3964,19 +3972,29 @@ if ( (navigator.mozGetUserMedia ||
       }
     };
 
-    // Propagate attachMediaStream and gUM in window and AdapterJS
+    window.createIceServer        = createIceServer;
+    window.createIceServers       = createIceServers;
+    window.RTCPeerConnection      = RTCPeerConnection;
+    window.RTCSessionDescription  = RTCSessionDescription;
+
     window.attachMediaStream      = attachMediaStream;
     window.reattachMediaStream    = reattachMediaStream;
     window.getUserMedia           = getUserMedia;
+    window.MediaStreamTrack       = MediaStreamTrack;
+    AdapterJS.createIceServer        = createIceServer;
+    AdapterJS.createIceServers       = createIceServers;
+    AdapterJS.RTCPeerConnection      = RTCPeerConnection;
+    AdapterJS.RTCSessionDescription  = RTCSessionDescription;
     AdapterJS.attachMediaStream   = attachMediaStream;
     AdapterJS.reattachMediaStream = reattachMediaStream;
     AdapterJS.getUserMedia        = getUserMedia;
+    AdapterJS.MediaStreamTrack    = MediaStreamTrack;
 
     AdapterJS.forwardEventHandlers = function (destElem, srcElem, prototype) {
-      properties = Object.getOwnPropertyNames( prototype );
+      var properties = Object.getOwnPropertyNames( prototype );
       for(var prop in properties) {
         if (prop) {
-          propName = properties[prop];
+          var propName = properties[prop];
 
           if (typeof propName.slice === 'function' &&
               propName.slice(0,2) === 'on' &&
@@ -4001,6 +4019,8 @@ if ( (navigator.mozGetUserMedia ||
         candidate.sdpMid, candidate.sdpMLineIndex, candidate.candidate
       );
     };
+    window.RTCIceCandidate    = RTCIceCandidate;
+    AdapterJS.RTCIceCandidate = RTCIceCandidate;
 
     // inject plugin
     AdapterJS.addEvent(document, 'readystatechange', AdapterJS.WebRTCPlugin.injectPlugin);
@@ -4286,7 +4306,7 @@ if ( (navigator.mozGetUserMedia ||
 
       iframe.contentWindow.postMessage(object, '*');
     };
-  } else if (window.webrtcDetectedBrowser === 'opera') {
+  } else if (window.c === 'opera') {
     console.warn('Opera does not support screensharing feature in getUserMedia');
   }
 })();

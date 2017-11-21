@@ -488,8 +488,6 @@ export default class RTC extends Listenable {
         }
 
         this.localTracks.push(track);
-
-        track.conference = this.conference;
     }
 
     /**

@@ -666,6 +666,44 @@ const SDPUtil = {
                     item => keepPts.indexOf(item.payload) !== -1);
             }
         }
+    },
+
+    /**
+     * Set bandwidth use b=AS:xxx
+     * @param {object} sdp - Remote sdp.
+     * @param {number | object} bandwidth - Bandwidth to be limited.
+     */
+    setBandwidth(sdp, bandwidth) {
+        if (typeof bandwidth !== 'object') {
+            return sdp;
+        }
+        let workingSdp = sdp;
+        let modifier = 'AS';
+
+        if (RTCBrowserType.isFirefox()) {
+            if (bandwidth.audio) {
+                bandwidth.audio = bandwidth * 1000;
+            }
+            if (bandwidth.video) {
+                bandwidth.video = bandwidth * 1000;
+            }
+            modifier = 'TIAS';
+        }
+
+        // remove existing bandwidth lines
+        if (bandwidth.audio || bandwidth.video) {
+            workingSdp = workingSdp.replace(/b=AS:.+\r\n/g, '');
+        }
+        if (bandwidth.audio) {
+            workingSdp = workingSdp.replace(/a=mid:audio\r\n/g,
+                `a=mid:audio\r\nb=${modifier}:${bandwidth.audio}\r\n`);
+        }
+        if (bandwidth.video) {
+            workingSdp = workingSdp.replace(/a=mid:video\r\n/g,
+                `a=mid:video\r\nb=${modifier}:${bandwidth.video}\r\n`);
+        }
+
+        return workingSdp;
     }
 };
 

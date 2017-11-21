@@ -73,7 +73,7 @@ function getTarget(simulcast, resolution, millisSinceStart) {
     // Completely ignore the bitrate in the first 5 seconds, as the first
     // event seems to fire very early and the value is suspicious and causes
     // false positives.
-    if (millisSinceStart < 5000) {
+    if (millisSinceStart < 3000) {
         return 1;
     }
 
@@ -105,13 +105,17 @@ function getTarget(simulcast, resolution, millisSinceStart) {
         const pixels = resolution.width * resolution.height;
 
         if (pixels <= 320 * 240) {
-            target = 600;
+            // target = 600;
+            target = 200;
         } else if (pixels <= 640 * 480) {
-            target = 1700;
+            // target = 1700;
+            target = 500;
         } else if (pixels <= 960 * 540) {
-            target = 2000;
+            // target = 2000;
+            target = 900;
         } else {
-            target = 2500;
+            // target = 2500;
+            target = 1200;
         }
     }
 
@@ -361,7 +365,7 @@ export default class ConnectionQuality {
 
         // Make sure that the quality doesn't climb quickly
         if (this._lastConnectionQualityUpdate > 0) {
-            const maxIncreasePerSecond = 2;
+            const maxIncreasePerSecond = 5;
             const prevConnectionQuality = this._localStats.connectionQuality;
             const diffSeconds
                 = (window.performance.now() - this._lastConnectionQualityUpdate)
@@ -438,7 +442,6 @@ export default class ConnectionQuality {
             return;
         }
 
-        let key;
         const updateLocalConnectionQuality
             = !this._conference.isConnectionInterrupted();
         const localVideoTrack
@@ -452,12 +455,7 @@ export default class ConnectionQuality {
             this._maybeUpdateUnmuteTime();
         }
 
-        // Copy the fields already in 'data'.
-        for (key in data) {
-            if (data.hasOwnProperty(key)) {
-                this._localStats[key] = data[key];
-            }
-        }
+        Object.assign(this._localStats, data);
 
         // And re-calculate the connectionQuality field.
         if (updateLocalConnectionQuality) {

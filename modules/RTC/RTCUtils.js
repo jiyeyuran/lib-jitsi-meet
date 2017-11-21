@@ -289,7 +289,7 @@ function getConstraints(um, options) {
                     chromeMediaSource: 'screen',
                     maxWidth: window.screen.width,
                     maxHeight: window.screen.height,
-                    maxFrameRate: 3
+                    maxFrameRate: options.maxScreenFps || 3
                 },
                 optional: []
             };
@@ -323,7 +323,7 @@ function getConstraints(um, options) {
                 chromeMediaSourceId: options.desktopStream,
                 maxWidth: window.screen.width,
                 maxHeight: window.screen.height,
-                maxFrameRate: 3
+                maxFrameRate: options.maxScreenFps || 3
             },
             optional: []
         };
@@ -335,7 +335,7 @@ function getConstraints(um, options) {
             constraints.video = { mandatory: {},
                 optional: [] };
         }
-        constraints.video.optional.push({ bandwidth: options.bandwidth });
+        constraints.video.optional.push({ bandwidth: options.bandwidth.video });
     }
 
     // we turn audio for both audio and video tracks, the fake audio & video
@@ -361,8 +361,8 @@ const DEFAULT_CONSTRAINTS = {
     video: {
         aspectRatio: 16 / 9,
         height: {
-            ideal: 1080,
-            max: 1080,
+            ideal: 360,
+            max: 360,
             min: 240
         }
     }
@@ -1285,7 +1285,7 @@ class RTCUtils extends Listenable {
             };
 
             options.devices = options.devices || [ 'audio', 'video' ];
-            options.resolution = options.resolution || '720';
+            options.resolution = options.resolution || '360';
 
             if (!screenObtainer.isSupported()
                 && options.devices.indexOf('desktop') !== -1) {

@@ -205,10 +205,8 @@ const ScreenObtainer = {
 
                 return null;
             } else if (options.desktopSharingChromeDisabled
-                || options.desktopSharingChromeMethod === false
                 || !options.desktopSharingChromeExtId) {
 
-                // TODO: desktopSharingChromeMethod is deprecated, remove.
                 return null;
             }
 
@@ -289,7 +287,8 @@ const ScreenObtainer = {
                     if (firefoxExtInstalled === null) {
                         firefoxExtInstalled = false;
                     }
-                    this.obtainScreenOnFirefox(callback, errorCallback);
+                    this.obtainScreenOnFirefox(options,
+                        callback, errorCallback);
                 },
                 300);
             logger.log(
@@ -333,7 +332,8 @@ const ScreenObtainer = {
                     onGetStreamResponse(
                         {
                             streamId,
-                            streamType
+                            streamType,
+                            maxScreenFps: this.options.maxScreenFps
                         },
                         onSuccess,
                         onFailure
@@ -362,18 +362,7 @@ const ScreenObtainer = {
 
             return;
         }
-
-        const {
-            desktopSharingChromeExtId,
-            desktopSharingChromeSources
-        } = this.options;
-
-        const gumOptions = {
-            desktopSharingChromeExtId,
-            desktopSharingChromeSources:
-                options.desktopSharingSources
-                    || desktopSharingChromeSources
-        };
+        const gumOptions = this.options;
 
         if (chromeExtInstalled) {
             doGetStreamFromExtension(
@@ -383,11 +372,16 @@ const ScreenObtainer = {
         } else {
             if (chromeExtUpdateRequired) {
                 /* eslint-disable no-alert */
-                alert(
-                    'Jitsi Desktop Streamer requires update. '
-                    + 'Changes will take effect after next Chrome restart.');
+                alert('简会桌面插件需要更新。');
 
                 /* eslint-enable no-alert */
+            }
+            if (window.inWall) {
+                this.handleExtensionInstallationError(options,
+                    streamCallback, failCallback, CHROME_EXTENSION_POPUP_ERROR
+                );
+
+                return;
             }
 
             // for opera there is no inline install
@@ -633,7 +627,9 @@ function doGetStreamFromExtension(options, streamCallback, failCallback) {
                 return;
             }
             logger.log('Response from extension: ', response);
-            onGetStreamResponse(response, streamCallback, failCallback);
+            const desktopOptions = Object.assign({}, options, response);
+
+            onGetStreamResponse(desktopOptions, streamCallback, failCallback);
         }
     );
 }
@@ -720,9 +716,11 @@ function waitForExtensionAfterInstall(options, waitInterval, retries) {
  * @param {Function} onFailure - callback for failure.
  */
 function onGetStreamResponse(
-        { streamId, streamType, error },
+        response,
         onSuccess,
         onFailure) {
+    const { streamId, streamType, error } = response;
+
     if (streamId) {
         gumFunction(
             [ 'desktop' ],
@@ -732,7 +730,10 @@ function onGetStreamResponse(
                 sourceType: streamType
             }),
             onFailure,
-            { desktopStream: streamId });
+            {
+                ...response,
+                desktopStream: streamId
+            });
     } else {
         // As noted in Chrome Desktop Capture API:
         // If user didn't select any source (i.e. canceled the prompt)
