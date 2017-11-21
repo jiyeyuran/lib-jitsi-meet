@@ -1179,7 +1179,7 @@ JitsiConference.prototype.onMemberJoined = function(
             participant._supportsDTMF = features.has('urn:xmpp:jingle:dtmf:0');
             this.updateDTMFSupport();
         },
-        error => logger.error(`Failed to discover features of ${jid}`, error));
+        error => logger.info(`Failed to discover features of ${jid}`, error));
 
     this._maybeStartOrStopP2P();
 };

@@ -564,7 +564,7 @@ export default class ParticipantConnectionStatusHandler {
             // fired),
             // so we don't care, but let's print the warning for
             // debugging purpose
-            logger.warn(`figure out conn status - no participant for: ${id}`);
+            logger.info(`figure out conn status - no participant for: ${id}`);
 
             return;
         }
