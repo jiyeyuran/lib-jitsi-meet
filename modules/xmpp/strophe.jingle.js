@@ -30,24 +30,16 @@ class JingleConnectionPlugin extends ConnectionPlugin {
      * Creates new <tt>JingleConnectionPlugin</tt>
      * @param {XMPP} xmpp
      * @param {EventEmitter} eventEmitter
-     * @param {Array<Object>} p2pStunServers an array which is part of the ice
-     * config passed to the <tt>PeerConnection</tt> with the structure defined
-     * by the WebRTC standard.
+     * @param {Object} iceConfig an object that holds the iceConfig to be passed
+     * to the p2p and the jvb <tt>PeerConnection</tt>.
      */
-    constructor(xmpp, eventEmitter, p2pStunServers) {
+    constructor(xmpp, eventEmitter, iceConfig) {
         super();
         this.xmpp = xmpp;
         this.eventEmitter = eventEmitter;
         this.sessions = {};
-        this.p2pIceConfig = { iceServers: [ ] };
-        if (Array.isArray(p2pStunServers)) {
-            logger.info('Configured STUN servers: ', p2pStunServers);
-            this.p2pIceConfig.iceServers = p2pStunServers;
-            this.p2pIceConfig.iceTransports
-                = xmpp.options.p2p.iceTransportPolicy;
-            this.p2pIceConfig.iceTransportPolicy
-                = xmpp.options.p2p.iceTransportPolicy;
-        }
+        this.jvbIceConfig = iceConfig.jvb;
+        this.p2pIceConfig = iceConfig.p2p;
         this.mediaConstraints = {
             mandatory: {
                 'OfferToReceiveAudio': true,
@@ -418,10 +410,10 @@ class JingleConnectionPlugin extends ConnectionPlugin {
  *
  * @param XMPP
  * @param eventEmitter
- * @param p2pStunServers
+ * @param iceConfig
  */
-export default function initJingle(XMPP, eventEmitter, p2pStunServers) {
+export default function initJingle(XMPP, eventEmitter, iceConfig) {
     Strophe.addConnectionPlugin(
         'jingle',
-        new JingleConnectionPlugin(XMPP, eventEmitter, p2pStunServers));
+        new JingleConnectionPlugin(XMPP, eventEmitter, iceConfig));
 }
