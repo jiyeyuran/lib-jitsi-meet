@@ -51,7 +51,7 @@
     "webpack": "3.8.1"
   },
   "scripts": {
-    "build": "webpack --progress --colors",
+    "watch": "webpack --progress --colors --watch",
     "lint": "eslint .",
     "postinstall": "webpack -p",
     "test": "karma start karma.conf.js",

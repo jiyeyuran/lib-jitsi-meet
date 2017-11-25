@@ -259,14 +259,6 @@ JitsiConference.prototype._init = function(options = {}) {
     this.participantConnectionStatus.init();
 
     if (!this.statistics) {
-        // XXX The property location on the global variable window is not
-        // defined in all execution environments (e.g. react-native). While
-        // jitsi-meet may polyfill it when executing on react-native, it is
-        // better for the cross-platform support to not require window.location
-        // especially when there is a worthy alternative (as demonstrated
-        // bellow).
-        const windowLocation = window.location;
-
         let callStatsAliasName = this.myUserId();
 
         if (config.enableDisplayNameInStats && config.displayName) {
@@ -277,7 +269,6 @@ JitsiConference.prototype._init = function(options = {}) {
             callStatsAliasName,
             callStatsConfIDNamespace:
                 config.callStatsConfIDNamespace
-                    || (windowLocation && windowLocation.hostname)
                     || (config.hosts && config.hosts.domain),
             callStatsCustomScriptUrl: config.callStatsCustomScriptUrl,
             callStatsID: config.callStatsID,
@@ -2028,14 +2019,6 @@ JitsiConference.prototype.sendApplicationLog = function(message) {
  */
 JitsiConference.prototype._isFocus = function(mucJid) {
     return this.room ? this.room.isFocus(mucJid) : null;
-};
-
-/**
- * Fires CONFERENCE_FAILED event with INCOMPATIBLE_SERVER_VERSIONS parameter
- */
-JitsiConference.prototype._fireIncompatibleVersionsEvent = function() {
-    this.eventEmitter.emit(JitsiConferenceEvents.CONFERENCE_FAILED,
-        JitsiConferenceErrors.INCOMPATIBLE_SERVER_VERSIONS);
 };
 
 /**

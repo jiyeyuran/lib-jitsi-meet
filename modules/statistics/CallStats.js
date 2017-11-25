@@ -182,6 +182,9 @@ export default class CallStats {
      * @private
      */
     static _reportError(cs, type, error, pc) {
+        if (!CallStats.backend) {
+            return;
+        }
         let _error = error;
 
         if (!_error) {

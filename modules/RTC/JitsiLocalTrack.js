@@ -350,8 +350,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
         const logMuteInfo = () => logger.info(`Mute ${this}: ${muted}`);
 
         if (this.isAudioTrack()
-                || this.videoType === VideoType.DESKTOP
-                || !RTCBrowserType.doesVideoMuteByStreamRemove()) {
+                || this.videoType === VideoType.DESKTOP) {
             logMuteInfo();
             if (this.track) {
                 this.track.enabled = !muted;
