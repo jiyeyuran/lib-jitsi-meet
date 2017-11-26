@@ -34,11 +34,12 @@ const RTCBrowserType = {
      * strategy or <tt>false</tt> otherwise.
      */
     doesVideoMuteByStreamRemove() {
-        return !(
-            RTCBrowserType.isFirefox()
-            || RTCBrowserType.isEdge()
-            || RTCBrowserType.isSafariWithWebrtc()
-        );
+        // return !(
+        //     RTCBrowserType.isFirefox()
+        //     || RTCBrowserType.isEdge()
+        //     || RTCBrowserType.isSafariWithWebrtc()
+        // );
+        return false;
     },
 
     /**

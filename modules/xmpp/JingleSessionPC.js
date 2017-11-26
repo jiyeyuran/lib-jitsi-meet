@@ -1480,7 +1480,7 @@ export default class JingleSessionPC extends JingleSession {
                     + `- current state: ${this.state}`);
         }
 
-        if (this.bandwidth) {
+        if (optionalRemoteSdp && this.bandwidth) {
             remoteSdp = SDPUtil.setBandwidth(remoteSdp, this.bandwidth);
         }
 

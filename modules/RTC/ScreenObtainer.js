@@ -3,6 +3,7 @@
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
 import RTCBrowserType from './RTCBrowserType';
+import RTCUtils from './RTCUtils';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
 
@@ -15,7 +16,7 @@ let chromeExtInstalled = false;
 /**
  * Handles obtaining a stream from a screen capture on different browsers.
  */
-const ScreenObtainer = {
+export default class ScreenObtainer {
     /**
      * Initializes the function used to obtain a screen capture
      * (this.obtainStream).
@@ -26,26 +27,18 @@ const ScreenObtainer = {
      * @param {boolean} [options.desktopSharingChromeExtId]
      * @param {boolean} [options.desktopSharingFirefoxDisabled]
      * @param {boolean} [options.desktopSharingFirefoxExtId] (deprecated)
-     * @param {Function} gum GUM method
      */
-    init(options = {
+    constructor(options = {
         disableDesktopSharing: false,
         desktopSharingChromeDisabled: false,
         desktopSharingChromeExtId: null,
         desktopSharingFirefoxDisabled: false,
         desktopSharingFirefoxExtId: null
-    }, gum) {
+    }) {
         // eslint-disable-next-line no-param-reassign
         this.options = options = options || {};
         this.extId = options.desktopSharingChromeExtId;
-        this.gum = gum;
 
-        this._handleExternalInstall = this._handleExternalInstall.bind(this);
-        this._installExtFromChromeStore
-            = this._installExtFromChromeStore.bind(this);
-        this._doGetStreamFromExtension
-            = this._doGetStreamFromExtension.bind(this);
-        this._onGetStreamResponse = this._onGetStreamResponse.bind(this);
         this.obtainStream
             = this.options.disableDesktopSharing
                 ? null : this._createObtainStreamMethod();
@@ -55,8 +48,7 @@ const ScreenObtainer = {
 
             return;
         }
-        this.obtainStream = this.obtainStream.bind(this);
-    },
+    }
 
     /**
      * Returns a method which will be used to obtain the screen sharing stream
@@ -76,13 +68,22 @@ const ScreenObtainer = {
         }
         if (RTCBrowserType.isFirefox()) {
             if (RTCBrowserType.getFirefoxVersion() >= 52) {
-                return this.obtainWebRTCScreen;
+                return this._onGetStreamResponse.bind(
+                    this, { streamType: 'window' });
             }
         }
         if (RTCBrowserType.isTemasysPluginUsed()) {
             if (AdapterJS
                     && AdapterJS.WebRTCPlugin.plugin.isScreensharingAvailable) {
-                return this.obtainWebRTCScreen;
+                const sourceId = AdapterJS.WebRTCPlugin.plugin.screensharingKey;
+
+                return this._onGetStreamResponse.bind(
+                    this,
+                    {
+                        streamId: sourceId,
+                        streamType: 'screen'
+                    }
+                );
             }
         }
         logger.log(
@@ -91,7 +92,7 @@ const ScreenObtainer = {
             RTCBrowserType.getBrowserName());
 
         return null;
-    },
+    }
 
     /**
      * Checks whether obtaining a screen capture is supported in the current
@@ -100,7 +101,7 @@ const ScreenObtainer = {
      */
     isSupported() {
         return Boolean(this.obtainStream);
-    },
+    }
 
     /**
      * Obtains a screen capture stream on Electron.
@@ -139,7 +140,7 @@ const ScreenObtainer = {
             onFailure(new JitsiTrackError(
                 JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_NOT_FOUND));
         }
-    },
+    }
 
     /**
      * Asks Chrome extension to call chooseDesktopMedia and gets chrome
@@ -179,8 +180,11 @@ const ScreenObtainer = {
             this._installExtFromChromeStore(
                 streamCallback, failCallback);
         }
-    },
+    }
 
+    /**
+     * Install extension from chrome store.
+     */
     _installExtFromChromeStore(streamCallback, failCallback) {
         try {
             chrome.webstore.install(getWebStoreInstallUrl(this.extId),
@@ -211,23 +215,11 @@ const ScreenObtainer = {
             failCallback(new JitsiTrackError(
                 JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR, e));
         }
-    },
+    }
 
     /**
-     * Obtains a desktop stream using getUserMedia.
-     *
-     * On firefox, the document's domain must be white-listed in the
-     * 'media.getusermedia.screensharing.allowed_domains' preference in
-     * 'about:config'.
+     * Install extension from external url.
      */
-    obtainWebRTCScreen(options, streamCallback, failCallback) {
-        this.gum(
-            [ 'screen' ],
-            stream => streamCallback({ stream }),
-            failCallback
-        );
-    },
-
     _handleExternalInstall(options, streamCallback, failCallback) {
         const now = new Date();
         const maxWaitDur = 1 * 60 * 1000;
@@ -253,7 +245,7 @@ const ScreenObtainer = {
                 }
             });
         }, options.interval);
-    },
+    }
 
     /**
      *
@@ -290,7 +282,7 @@ const ScreenObtainer = {
                     response, streamCallback, failCallback);
             }
         );
-    },
+    }
 
     /**
      * Handles response from external application / extension and calls GUM to
@@ -302,18 +294,34 @@ const ScreenObtainer = {
      * @param {Function} onFailure - callback for failure.
      */
     _onGetStreamResponse({ streamId, streamType }, onSuccess, onFailure) {
-        this.gum(
-            [ 'desktop' ],
-            stream => onSuccess({
+        const constraints = {};
+
+        if (RTCBrowserType.isTemasysPluginUsed()) {
+            constraints.video = { optional: [ { sourceId: streamId } ] };
+        } else if (RTCBrowserType.isFirefox()) {
+            constraints.video = { mediaSource: [ streamType ] };
+        } else {
+            constraints.video = {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: streamId,
+                    maxWidth: window.screen.width,
+                    maxHeight: window.screen.height,
+                    maxFrameRate: this.options.maxScreenFps || 3
+                }
+            };
+        }
+        RTCUtils.getUserMedia(constraints).then(stream => {
+            onSuccess({
                 stream,
                 sourceId: streamId,
                 sourceType: streamType
-            }),
-            onFailure,
-            {
-                ...this.options,
-                desktopStream: streamId
             });
+        })
+        .catch(err => {
+            onFailure(new JitsiTrackError(
+                err, constraints, [ 'desktop' ]));
+        });
     }
 };
 
@@ -371,5 +379,3 @@ function initInlineInstalls(extId) {
 function getWebStoreInstallUrl(extId) {
     return `https://chrome.google.com/webstore/detail/${extId}`;
 }
-
-export default ScreenObtainer;

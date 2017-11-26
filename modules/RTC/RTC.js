@@ -387,13 +387,6 @@ export default class RTC extends Listenable {
 
     /**
      *
-     */
-    static isRTCReady() {
-        return RTCUtils.isRTCReady();
-    }
-
-    /**
-     *
      * @param options
      */
     static init(options = {}) {

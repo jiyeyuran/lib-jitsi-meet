@@ -55,6 +55,15 @@ const JitsiMediaDevices = {
     },
 
     /**
+     * Returns list of available media devices if its obtained, otherwise an
+     * empty array is returned/
+     * @returns {Array} list of available media devices.
+     */
+    getCurrentMediaDevices() {
+        return RTC.getCurrentlyAvailableMediaDevices();
+    },
+
+    /**
      * Returns true if user granted permission to media devices.
      * @param {'audio'|'video'} [type] - type of devices to check,
      *      undefined stands for both 'audio' and 'video' together
