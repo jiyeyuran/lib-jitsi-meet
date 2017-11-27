@@ -9,15 +9,13 @@ import * as MediaType from '../../service/RTC/MediaType';
 import Resolutions from '../../service/RTC/Resolutions';
 import RTCBrowserType from './RTCBrowserType';
 import RTCEvents from '../../service/RTC/RTCEvents';
+import ortcRTCPeerConnection from './ortc/RTCPeerConnection';
 import ScreenObtainer from './ScreenObtainer';
+import SDPUtil from '../xmpp/SDPUtil';
 import Statistics from '../statistics/statistics';
 import VideoType from '../../service/RTC/VideoType';
 
 const logger = getLogger(__filename);
-
-if (!RTCBrowserType.isReactNative()) {
-    require('webrtc-adapter');
-}
 
 const eventEmitter = new EventEmitter();
 
@@ -101,14 +99,12 @@ function setResolutionConstraints(constraints, resolution) {
  * Creates a constraints object to be passed into a call to getUserMedia.
  *
  * @param {Array} um - An array of user media types to get. The accepted
- * types are "video", "audio", and "desktop."
+ * types are "video" and "audio".
  * @param {Object} options - Various values to be added to the constraints.
  * @param {string} options.cameraDeviceId - The device id for the video
  * capture device to get video from.
  * @param {Object} options.constraints - Default constraints object to use
  * as a base for the returned constraints.
- * @param {Object} options.desktopStream - The desktop source id from which
- * to capture a desktop sharing video.
  * @param {string} options.facingMode - Which direction the camera is
  * pointing to.
  * @param {string} options.micDeviceId - The device id for the audio capture
@@ -121,6 +117,7 @@ function getConstraints(um = [], options = {}) {
     // the passed in constraints object.
     const constraints = JSON.parse(JSON.stringify(options.constraints || {}));
 
+
     if (um.indexOf('video') >= 0) {
         if (!constraints.video || typeof constraints.video === 'boolean') {
             constraints.video = {};
@@ -129,7 +126,7 @@ function getConstraints(um = [], options = {}) {
             constraints.video.optional = [];
         }
         if (!constraints.video.mandatory) {
-            constraints.video.mandatory = [];
+            constraints.video.mandatory = {};
         }
         if (options.cameraDeviceId) {
             if (isNewStyleConstraintsSupported) {
@@ -164,12 +161,16 @@ function getConstraints(um = [], options = {}) {
         if (!constraints.audio.optional) {
             constraints.audio.optional = [];
         }
-        if (isNewStyleConstraintsSupported) {
-            // New style of setting device id.
-            constraints.audio.deviceId = options.micDeviceId;
+        if (options.micDeviceId) {
+            if (isNewStyleConstraintsSupported) {
+                // New style of setting device id.
+                constraints.audio.deviceId = options.micDeviceId;
+            }
+            constraints.video.optional.push({
+                sourceId: options.micDeviceId
+            });
         }
         constraints.audio.optional.push(
-            { sourceId: options.micDeviceId },
             { echoCancellation: !disableAEC && !disableAP },
             { googEchoCancellation: !disableAEC && !disableAP },
             { googAutoGainControl: !disableAGC && !disableAP },
@@ -459,20 +460,26 @@ class RTCUtils extends Listenable {
         const mediaDevices = navigator.mediaDevices;
 
         this.getUserMedia = mediaDevices.getUserMedia.bind(mediaDevices);
-        this.RTCPeerConnectionType = RTCPeerConnection;
         this.attachMediaStream = wrapAttachMediaStream(
             (element, stream) => {
                 defaultSetVideoSrc(element, stream);
 
                 return element;
             });
-        this.getStreamID = stream => stream.id;
-        this.getTrackID = track => track.id;
-
+        if (RTCBrowserType.isEdge()) {
+            this.RTCPeerConnectionType = ortcRTCPeerConnection;
+            this.getStreamID = stream => SDPUtil.filterSpecialChars(
+                stream.jitsiRemoteId || stream.id);
+            this.getTrackID = track => track.jitsiRemoteId || track.id;
+        } else {
+            this.RTCPeerConnectionType = RTCPeerConnection;
+            this.getStreamID = stream => SDPUtil.filterSpecialChars(stream.id);
+            this.getTrackID = track => track.id;
+        }
         this._initPCConstraints(options);
 
         if (RTCBrowserType.isReactNative()) {
-            return Promise.resovle();
+            return Promise.resolve();
         }
 
         this.enumerateDevices

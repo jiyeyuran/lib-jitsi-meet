@@ -347,6 +347,9 @@ export default class JingleSessionPC extends JingleSession {
             if (!this.peerconnection) {
                 return;
             }
+            logger.log(
+                `(TIME) ICE signaling ${this.peerconnection.signalingState}`
+                    + ` P2P? ${this.isP2P}:`, window.performance.now());
             if (this.peerconnection.signalingState === 'stable') {
                 this.wasstable = true;
             } else if (
@@ -377,8 +380,7 @@ export default class JingleSessionPC extends JingleSession {
             }
             logger.log(
                 `(TIME) ICE ${this.peerconnection.iceConnectionState}`
-                    + ` P2P? ${this.isP2P}:\t`,
-                now);
+                    + ` P2P? ${this.isP2P}:`, now);
             const iceConnectionEventName
                 = `${this.isP2P ? 'p2p.' : ''}${_ICE_CONNECTION_STATE_}.${
                     this.peerconnection.iceConnectionState}`;
@@ -639,6 +641,14 @@ export default class JingleSessionPC extends JingleSession {
         // the assumption that candidates are spawned after the offer/answer
         // and XMPP preserves order).
         const workFunction = finishedCallback => {
+            if (!this.peerconnection.remoteDescription
+                    || !this.peerconnection.remoteDescription.sdp) {
+                setTimeout(() => {
+                    this.modificationQueue.push(workFunction);
+                }, 50);
+
+                return;
+            }
             for (const iceCandidate of iceCandidates) {
                 this.peerconnection.addIceCandidate(
                     iceCandidate,
@@ -1363,7 +1373,7 @@ export default class JingleSessionPC extends JingleSession {
                     const newLocalSdp
                         = new SDP(this.peerconnection.localDescription.sdp);
 
-                    logger.log(
+                    logger.debug(
                         `${logPrefix} - OK, SDPs: `, oldLocalSdp, newLocalSdp);
                     this.notifyMySSRCUpdate(oldLocalSdp, newLocalSdp);
                     finishedCallback();
@@ -1553,8 +1563,8 @@ export default class JingleSessionPC extends JingleSession {
         if (this.peerconnection.signalingState === 'have-local-offer') {
 
             // Skip createOffer and setLocalDescription or FF will fail
-            logger.debug(
-                'Renegotiate: setting remote description');
+            logger.info(
+                'Renegotiate have-local-offer: setting remote description');
             this.peerconnection.setRemoteDescription(
                 remoteDescription,
                 () => {
@@ -1572,7 +1582,7 @@ export default class JingleSessionPC extends JingleSession {
                 error => reject(`setRemoteDescription failed: ${error}`)
             );
         } else {
-            logger.debug('Renegotiate: creating offer');
+            logger.info('Renegotiate: creating offer');
             this.peerconnection.createOffer(
                 offer => {
                     logger.debug('Renegotiate: setting local description');

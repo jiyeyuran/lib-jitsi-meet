@@ -1,7 +1,6 @@
 import { _TTFM_ } from '../../service/statistics/AnalyticsEvents';
 import JitsiTrack from './JitsiTrack';
 import * as JitsiTrackEvents from '../../JitsiTrackEvents';
-import RTCBrowserType from './RTCBrowserType';
 import Statistics from '../statistics/statistics';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
@@ -253,21 +252,7 @@ export default class JitsiRemoteTrack extends JitsiTrack {
             ttfmTrackerVideoAttached = true;
         }
 
-        if (RTCBrowserType.isTemasysPluginUsed()) {
-            // XXX Don't require Temasys unless it's to be used because it
-            // doesn't run on React Native, for example.
-            const AdapterJS = require('./adapter.screenshare');
-
-            // FIXME: this is not working for IE11
-            AdapterJS.addEvent(
-                container,
-                'play',
-                this._playCallback.bind(this));
-        } else {
-            container.addEventListener(
-                'canplay',
-                this._playCallback.bind(this));
-        }
+        container.addEventListener('canplay', this._playCallback.bind(this));
     }
 
     /**

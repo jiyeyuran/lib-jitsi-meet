@@ -137,9 +137,7 @@ export default class XMPP extends Listenable {
         const statusStr = Strophe.getStatusString(status).toLowerCase();
 
         this.connectionTimes[statusStr] = now;
-        logger.log(
-            `(TIME) Strophe ${statusStr}${msg ? `[${msg}]` : ''}:\t`,
-            now);
+        logger.log(`(TIME) Strophe ${statusStr}${msg ? `[${msg}]` : ''}:`, now);
         if (status === Strophe.Status.CONNECTED
             || status === Strophe.Status.ATTACHED) {
             if (this.options.useStunTurn

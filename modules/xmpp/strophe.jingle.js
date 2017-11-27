@@ -12,6 +12,7 @@ import XMPPEvents from '../../service/xmpp/XMPPEvents';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import RandomUtil from '../util/RandomUtil';
 import Statistics from '../statistics/statistics';
+import RTCBrowserType from '../RTC/RTCBrowserType';
 
 import JingleSessionPC from './JingleSessionPC';
 import ConnectionPlugin from './ConnectionPlugin';
@@ -40,14 +41,21 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.sessions = {};
         this.jvbIceConfig = iceConfig.jvb;
         this.p2pIceConfig = iceConfig.p2p;
-        this.mediaConstraints = {
-            mandatory: {
+        if (RTCBrowserType.isEdge()) {
+            this.mediaConstraints = {
                 'OfferToReceiveAudio': true,
                 'OfferToReceiveVideo': true
-            }
+            };
+        } else {
+            this.mediaConstraints = {
+                mandatory: {
+                    'OfferToReceiveAudio': true,
+                    'OfferToReceiveVideo': true
+                }
 
-            // MozDontOfferDataChannel: true when this is firefox
-        };
+                // MozDontOfferDataChannel: true when this is firefox
+            };
+        }
     }
 
     /**
@@ -75,7 +83,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
             id: iq.getAttribute('id')
         });
 
-        logger.log(`on jingle ${action} from ${fromJid}`, iq);
+        logger.debug(`on jingle ${action} from ${fromJid}`, iq);
         let sess = this.sessions[sid];
 
         if (action !== 'session-initiate') {
