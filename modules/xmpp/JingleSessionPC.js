@@ -1018,7 +1018,7 @@ export default class JingleSessionPC extends JingleSession {
 
         // Calling tree() to print something useful
         accept = accept.tree();
-        logger.info('Sending session-accept', accept);
+        logger.debug('Sending session-accept', accept);
         this.connection.sendIQ(accept,
             success,
             this.newJingleErrorHandler(accept, error => {
