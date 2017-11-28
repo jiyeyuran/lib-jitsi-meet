@@ -1,4 +1,4 @@
-/* global chrome, $, AdapterJS */
+/* global $, AdapterJS */
 
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
@@ -187,7 +187,8 @@ export default class ScreenObtainer {
      */
     _installExtFromChromeStore(streamCallback, failCallback) {
         try {
-            chrome.webstore.install(getWebStoreInstallUrl(this.extId),
+            window.chrome.webstore.install(
+                getWebStoreInstallUrl(this.extId),
                 arg => {
                     logger.log('Extension installed successfully', arg);
                     let maxRetries = 0;
@@ -254,7 +255,7 @@ export default class ScreenObtainer {
      * @param failCallback
      */
     _doGetStreamFromExtension(streamCallback, failCallback) {
-        chrome.runtime.sendMessage(
+        window.chrome.runtime.sendMessage(
             this.extId,
             {
                 getStream: true,
@@ -263,11 +264,11 @@ export default class ScreenObtainer {
             response => {
                 if (!response) {
                     logger.error('chrome last error: ',
-                        chrome.runtime.lastError);
+                        window.chrome.runtime.lastError);
 
                     failCallback(
                         JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR,
-                        chrome.runtime.lastError);
+                        window.chrome.runtime.lastError);
 
                     return;
                 }
@@ -323,7 +324,7 @@ export default class ScreenObtainer {
                 err, constraints, [ 'desktop' ]));
         });
     }
-};
+}
 
 /**
  *
@@ -331,7 +332,7 @@ export default class ScreenObtainer {
  *
  */
 function initChromeExtension(extId) {
-    initInlineInstalls(extId);
+    initInlineInstall(extId);
     checkChromeExtInstalled(extId, ok => {
         chromeExtInstalled = ok;
     });
@@ -342,10 +343,10 @@ function initChromeExtension(extId) {
  * @param extId
  */
 function checkChromeExtInstalled(extId, callback) {
-    if (!chrome || !chrome.runtime) {
+    if (!window.chrome || !window.chrome.runtime) {
         callback(false);
     } else {
-        chrome.runtime.sendMessage(extId, { getVersion: true },
+        window.chrome.runtime.sendMessage(extId, { getVersion: true },
             response => {
                 if (response) {
                     callback(true);
@@ -362,7 +363,7 @@ function checkChromeExtInstalled(extId, callback) {
  * website of published extension.
  * @param extId supports "desktopSharingChromeExtId"
  */
-function initInlineInstalls(extId) {
+function initInlineInstall(extId) {
     if ($('link[rel=chrome-webstore-item]').length === 0) {
         $('head').append('<link rel="chrome-webstore-item">');
     }
