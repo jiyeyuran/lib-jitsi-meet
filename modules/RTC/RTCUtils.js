@@ -62,6 +62,7 @@ const isDeviceChangeEventSupported
 const isNewStyleConstraintsSupported
     = RTCBrowserType.isFirefox()
         || RTCBrowserType.isEdge()
+        || RTCBrowserType.isReactNative()
         || RTCBrowserType.isTemasysPluginUsed();
 
 /**
