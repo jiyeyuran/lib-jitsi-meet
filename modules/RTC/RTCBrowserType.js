@@ -315,7 +315,6 @@ const RTCBrowserType = {
      */
     supportsSimulcast() {
         return RTCBrowserType.isChrome()
-            || RTCBrowserType.isReactNative()
             || RTCBrowserType.isFirefox()
             || RTCBrowserType.isElectron()
             || RTCBrowserType.isNWJS()
