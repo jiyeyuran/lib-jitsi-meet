@@ -318,7 +318,8 @@ const RTCBrowserType = {
             || RTCBrowserType.isReactNative()
             || RTCBrowserType.isFirefox()
             || RTCBrowserType.isElectron()
-            || RTCBrowserType.isNWJS();
+            || RTCBrowserType.isNWJS()
+            || RTCBrowserType.isReactNative();
     },
 
     supportsRtx() {
