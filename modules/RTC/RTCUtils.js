@@ -175,7 +175,7 @@ function getConstraints(um = [], options = {}) {
             { echoCancellation: !disableAEC && !disableAP },
             { googEchoCancellation: !disableAEC && !disableAP },
             { googAutoGainControl: !disableAGC && !disableAP },
-            { googNoiseSupression: !disableNS && !disableAP },
+            { googNoiseSuppression: !disableNS && !disableAP },
             { googHighpassFilter: !disableHPF && !disableAP },
             { googNoiseSuppression2: !disableNS && !disableAP },
             { googEchoCancellation2: !disableAEC && !disableAP },
@@ -517,8 +517,16 @@ class RTCUtils extends Listenable {
      * in peer to peer connection mode.
      */
     _initPCConstraints(options) {
-        this.pcConstraints = { optional: [] };
-        this.pcConstraints.optional.push({ googDscp: true });
+        this.pcConstraints = { optional: [
+            { googHighStartBitrate: 0 },
+            { googPayloadPadding: true },
+            { googScreencastMinBitrate: options.screencastMinBitrate || 400 },
+            { googCpuOveruseDetection: true },
+            { googCpuOveruseEncodeUsage: true },
+            { googCpuUnderuseThreshold: 55 },
+            { googCpuOveruseThreshold: 85 },
+            { googDscp: true }
+        ] };
         if (options.useIPv6) {
             this.pcConstraints.optional.push({ googIPv6: true });
         }
