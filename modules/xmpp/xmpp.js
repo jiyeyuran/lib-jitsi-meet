@@ -31,7 +31,12 @@ function createConnection(token, bosh = '/http-bind') {
         bosh += `${bosh.indexOf('?') === -1 ? '?' : '&'}token=${token}`;
     }
 
-    return new Strophe.Connection(bosh);
+    const conn = new Strophe.Connection(bosh);
+
+    // The default maxRetries is 5, which is too long.
+    conn.maxRetries = 3;
+
+    return conn;
 }
 
 /**
@@ -178,6 +183,11 @@ export default class XMPP extends Listenable {
                 this.connectionFailed = true;
             }
             this.lastErrorMsg = msg;
+            if (msg === 'giving-up') {
+                this.eventEmitter.emit(
+                    JitsiConnectionEvents.CONNECTION_FAILED,
+                    JitsiConnectionErrors.OTHER_ERROR, msg);
+            }
         } else if (status === Strophe.Status.DISCONNECTED) {
             // Stop ping interval
             this.connection.ping.stopInterval();
