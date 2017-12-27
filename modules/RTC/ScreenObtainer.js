@@ -152,6 +152,7 @@ export default class ScreenObtainer {
         } else {
             if (RTCBrowserType.isOpera()) {
                 extOptions.extUrl = null;
+                extOptions.listener(false, getWebStoreInstallUrl(this.extId));
                 this._handleExternalInstall(
                     extOptions, streamCallback, failCallback);
 
@@ -225,18 +226,14 @@ export default class ScreenObtainer {
         const now = new Date();
         const maxWaitDur = 1 * 60 * 1000;
 
-        if (options.extUrl) {
-            window.open(options.extUrl);
-        } else {
-            options.listener(false, getWebStoreInstallUrl(this.extId));
-        }
+        window.open(options.extUrl);
         const t = setInterval(() => {
             checkChromeExtInstalled(this.extId, ok => {
                 if (ok) {
                     chromeExtInstalled = true;
                     this._doGetStreamFromExtension(
                         streamCallback, failCallback);
-                    !options.extUrl && options.listener(true);
+                    options.listener(true);
                     clearInterval(t);
                 } else if (options.checkAgain() === false
                     || (new Date() - now) > maxWaitDur) {

@@ -285,9 +285,6 @@ export default class JingleSessionPC extends JingleSession {
                     this.isP2P,
                     pcOptions);
 
-        // if (this.bandwidth && this.peerconnection.setBitrate) {
-        //     this.peerconnection.setBitrate(0, this.bandwidth.video);
-        // }
         this.peerconnection.onicecandidate = ev => {
             if (!ev) {
                 // There was an incomplete check for ev before which left
@@ -1490,7 +1487,7 @@ export default class JingleSessionPC extends JingleSession {
                     + `- current state: ${this.state}`);
         }
 
-        if (optionalRemoteSdp && this.bandwidth) {
+        if (this.bandwidth) {
             remoteSdp = SDPUtil.setBandwidth(remoteSdp, this.bandwidth);
         }
 
