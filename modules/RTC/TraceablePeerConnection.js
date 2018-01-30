@@ -9,7 +9,7 @@ import * as MediaType from '../../service/RTC/MediaType';
 import LocalSdpMunger from './LocalSdpMunger';
 import RTC from './RTC';
 import RTCUtils from './RTCUtils';
-import RTCBrowserType from './RTCBrowserType';
+import browser from '../browser';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import RtxModifier from '../xmpp/RtxModifier';
 
@@ -213,8 +213,10 @@ export default function TraceablePeerConnection(
 
     // override as desired
     this.trace = (what, info) => {
-        /* logger.warn('WTRACE', what, info);
-        if (info && RTCBrowserType.isIExplorer()) {
+        logger.debug(what, info);
+
+        /*
+        if (info && browser.isIExplorer()) {
             if (info.length > 1024) {
                 logger.warn('WTRACE', what, info.substr(1024));
             }
@@ -231,7 +233,7 @@ export default function TraceablePeerConnection(
     this.onicecandidate = null;
     this.peerconnection.onicecandidate = event => {
         // FIXME: this causes stack overflow with Temasys Plugin
-        if (!RTCBrowserType.isTemasysPluginUsed()) {
+        if (!browser.isTemasysPluginUsed()) {
             this.trace(
                 'onicecandidate',
                 JSON.stringify(event.candidate, null, ' '));
@@ -268,14 +270,14 @@ export default function TraceablePeerConnection(
     };
     this.ondatachannel = null;
     this.peerconnection.ondatachannel = event => {
-        this.trace('ondatachannel', event);
+        this.trace('ondatachannel');
         if (this.ondatachannel !== null) {
             this.ondatachannel(event);
         }
     };
 
     // XXX: do all non-firefox browsers which we support also support this?
-    if (!RTCBrowserType.isFirefox() && this.maxstats) {
+    if (!browser.isFirefox() && this.maxstats) {
         this.statsinterval = window.setInterval(() => {
             this.peerconnection.getStats(stats => {
                 const results = stats.result();
@@ -389,14 +391,14 @@ TraceablePeerConnection.prototype._getDesiredMediaDirection = function(
  */
 TraceablePeerConnection.prototype.isSimulcastOn = function() {
     return !this.options.disableSimulcast
-        && RTCBrowserType.supportsSimulcast()
+        && browser.supportsSimulcast()
 
         // Firefox has been added as supporting simulcast, but it is
         // experimental so we only want to do it for firefox if the config
-        // option is set.  Unfortunately, RTCBrowserType::supportsSimulcast()
+        // option is set.  Unfortunately, browser::supportsSimulcast()
         // doesn't have a reference to the config options, so we have
         // to do it here
-        && (!RTCBrowserType.isFirefox()
+        && (!browser.isFirefox()
             || this.options.enableFirefoxSimulcast);
 };
 
@@ -557,8 +559,8 @@ TraceablePeerConnection.prototype._remoteStreamAdded = function(stream) {
     }
 
     // Bind 'addtrack'/'removetrack' event handlers
-    if (RTCBrowserType.isChrome() || RTCBrowserType.isNWJS()
-        || RTCBrowserType.isElectron() || RTCBrowserType.isEdge()) {
+    if (browser.isChrome() || browser.isNWJS()
+        || browser.isElectron() || browser.isEdge()) {
         stream.onaddtrack = event => {
             this._remoteTrackAdded(stream, event.track);
         };
@@ -627,7 +629,7 @@ TraceablePeerConnection.prototype._remoteTrackAdded = function(stream, track) {
     ssrcLines = ssrcLines.filter(
         line => {
             const msid
-                = RTCBrowserType.isTemasysPluginUsed() ? 'mslabel' : 'msid';
+                = browser.isTemasysPluginUsed() ? 'mslabel' : 'msid';
 
 
             return line.indexOf(`${msid}:${streamId}`) !== -1;
@@ -1195,7 +1197,7 @@ const getters = {
         this.trace('getLocalDescription::preTransform', dumpSDP(desc));
 
         // if we're running on FF, transform to Plan B first.
-        if (RTCBrowserType.usesUnifiedPlan()) {
+        if (browser.usesUnifiedPlan()) {
             desc = this.interop.toPlanB(desc);
             this.trace('getLocalDescription::postTransform (Plan B)',
                 dumpSDP(desc));
@@ -1205,7 +1207,7 @@ const getters = {
                 dumpSDP(desc));
         }
 
-        if (RTCBrowserType.doesVideoMuteByStreamRemove()) {
+        if (browser.doesVideoMuteByStreamRemove()) {
             desc = this.localSdpMunger.maybeAddMutedLocalVideoTracksToSDP(desc);
             logger.debug(
                 'getLocalDescription::postTransform (munge local SDP)', desc);
@@ -1221,6 +1223,9 @@ const getters = {
         // happening (check setLocalDescription impl).
         desc = enforceSendRecv(desc);
 
+        // See the method's doc for more info about this transformation.
+        desc = this.localSdpMunger.transformStreamIdentifiers(desc);
+
         return desc;
     },
     remoteDescription() {
@@ -1229,7 +1234,7 @@ const getters = {
         this.trace('getRemoteDescription::preTransform', dumpSDP(desc));
 
         // if we're running on FF, transform to Plan B first.
-        if (RTCBrowserType.usesUnifiedPlan()) {
+        if (browser.usesUnifiedPlan()) {
             desc = this.interop.toPlanB(desc);
             this.trace(
                 'getRemoteDescription::postTransform (Plan B)', dumpSDP(desc));
@@ -1275,14 +1280,14 @@ TraceablePeerConnection.prototype.addTrack = function(track) {
         this._addStream(webrtcStream);
 
     // It's not ok for a track to not have a WebRTC stream if:
-    } else if (!RTCBrowserType.doesVideoMuteByStreamRemove()
+    } else if (!browser.doesVideoMuteByStreamRemove()
                 || track.isAudioTrack()
                 || (track.isVideoTrack() && !track.isMuted())) {
         logger.error(`${this} no WebRTC stream for: ${track}`);
     }
 
     // Muted video tracks do not have WebRTC stream
-    if (RTCBrowserType.doesVideoMuteByStreamRemove()
+    if (browser.doesVideoMuteByStreamRemove()
             && track.isVideoTrack() && track.isMuted()) {
         const ssrcInfo = this.generateNewStreamSSRCInfo(track);
 
@@ -1353,7 +1358,7 @@ TraceablePeerConnection.prototype._addStream = function(mediaStream) {
  * @param {MediaStream} mediaStream
  */
 TraceablePeerConnection.prototype._removeStream = function(mediaStream) {
-    if (RTCBrowserType.isFirefox()) {
+    if (browser.isFirefox()) {
         this._handleFirefoxRemoveStream(mediaStream);
     } else {
         this.peerconnection.removeStream(mediaStream);
@@ -1418,7 +1423,7 @@ TraceablePeerConnection.prototype.removeTrack = function(localTrack) {
     this.localSSRCs.delete(localTrack.rtcId);
 
     if (webRtcStream) {
-        if (RTCBrowserType.isFirefox()) {
+        if (browser.isFirefox()) {
             this._handleFirefoxRemoveStream(webRtcStream);
         } else {
             this.peerconnection.removeStream(webRtcStream);
@@ -1640,7 +1645,7 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
     localSdp = this._ensureSimulcastGroupIsLast(localSdp);
 
     // if we're using unified plan, transform to it first.
-    if (RTCBrowserType.usesUnifiedPlan()) {
+    if (browser.usesUnifiedPlan()) {
         localSdp = this.interop.toUnifiedPlan(localSdp);
         this.trace(
             'setLocalDescription::postTransform (Unified Plan)',
@@ -1763,7 +1768,7 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
     }
 
     // If the browser uses unified plan, transform to it first
-    if (RTCBrowserType.usesUnifiedPlan()) {
+    if (browser.usesUnifiedPlan()) {
         // eslint-disable-next-line no-param-reassign
         description = new RTCSessionDescription({
             type: description.type,
@@ -1795,7 +1800,7 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
 
     // Safari WebRTC errors when no supported video codec is found in the offer.
     // To prevent the error, inject H264 into the video mLine.
-    if (RTCBrowserType.isSafariWithWebrtc()) {
+    if (browser.isSafariWithWebrtc()) {
         logger.debug('Maybe injecting H264 into the remote description');
 
         // eslint-disable-next-line no-param-reassign
@@ -1983,7 +1988,7 @@ TraceablePeerConnection.prototype.close = function() {
  * @private
  */
 const _fixAnswerRFC4145Setup = function(offer, answer) {
-    if (!RTCBrowserType.isChrome()) {
+    if (!browser.isChrome()) {
         // It looks like Firefox doesn't agree with the fix (at least in its
         // current implementation) because it effectively remains active even
         // after we tell it to become passive. Apart from Firefox which I tested
@@ -2034,7 +2039,7 @@ TraceablePeerConnection.prototype.createAnswer = function(
         successCallback,
         failureCallback,
         constraints) {
-    if (RTCBrowserType.supportsRtpSender() && this.isSimulcastOn()) {
+    if (browser.supportsRtpSender() && this.isSimulcastOn()) {
         const videoSender
             = this.peerconnection.getSenders().find(sender =>
                 sender.track.kind === 'video');
@@ -2085,7 +2090,7 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
                 `create${logName}OnSuccess::preTransform`, dumpSDP(resultSdp));
 
             // if we're using unified plan, transform to Plan B.
-            if (RTCBrowserType.usesUnifiedPlan()) {
+            if (browser.usesUnifiedPlan()) {
                 // eslint-disable-next-line no-param-reassign
                 resultSdp = this.interop.toPlanB(resultSdp);
                 this.trace(
@@ -2109,7 +2114,7 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
              *  after that, when we try and go back to unified plan it will
              *  complain about unmapped ssrcs)
              */
-            if (!RTCBrowserType.isFirefox()) {
+            if (!browser.isFirefox()) {
                 // If there are no local video tracks, then a "recvonly"
                 // SSRC needs to be generated
                 if (!this.hasAnyTracksOfType(MediaType.VIDEO)
@@ -2141,7 +2146,7 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
                     dumpSDP(resultSdp));
             }
 
-            if (!this.options.disableRtx && RTCBrowserType.supportsRtx()) {
+            if (!this.options.disableRtx && browser.supportsRtx()) {
                 // eslint-disable-next-line no-param-reassign
                 resultSdp = new RTCSessionDescription({
                     type: resultSdp.type,
@@ -2316,9 +2321,9 @@ TraceablePeerConnection.prototype.getStats = function(callback, errback) {
     // TODO (brian): After moving all browsers to adapter, check if adapter is
     // accounting for different getStats apis, making the browser-checking-if
     // unnecessary.
-    if (RTCBrowserType.isFirefox()
-            || RTCBrowserType.isTemasysPluginUsed()
-            || RTCBrowserType.isReactNative()) {
+    if (browser.isFirefox()
+            || browser.isTemasysPluginUsed()
+            || browser.isReactNative()) {
         this.peerconnection.getStats(
             null,
             callback,
@@ -2327,7 +2332,7 @@ TraceablePeerConnection.prototype.getStats = function(callback, errback) {
                 // Making sure that getStats won't fail if error callback is
                 // not passed.
             }));
-    } else if (RTCBrowserType.isSafariWithWebrtc()) {
+    } else if (browser.isSafariWithWebrtc()) {
         // FIXME: Safari's native stats implementation is not compatibile with
         // existing stats processing logic. Skip implementing stats for now to
         // at least get native webrtc Safari available for use.
@@ -2368,7 +2373,7 @@ TraceablePeerConnection.prototype.generateNewStreamSSRCInfo = function(track) {
             groups: []
         };
     }
-    if (!this.options.disableRtx && RTCBrowserType.supportsRtx()) {
+    if (!this.options.disableRtx && browser.supportsRtx()) {
         // Specifically use a for loop here because we'll
         //  be adding to the list we're iterating over, so we
         //  only want to iterate through the items originally

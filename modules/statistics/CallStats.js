@@ -1,6 +1,6 @@
 /* global callstats */
 
-import RTCBrowserType from '../RTC/RTCBrowserType';
+import browser from '../browser';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
@@ -303,7 +303,7 @@ export default class CallStats {
                 // NOTE it is not safe to log whole objects on react-native as
                 // those contain too many circular references and may crash
                 // the app.
-                if (!RTCBrowserType.isReactNative()) {
+                if (!browser.isReactNative()) {
                     console && console.debug('reportError', pc, cs, type);
                 }
             } else {
@@ -353,7 +353,7 @@ export default class CallStats {
             throw new Error('CallStats backend has been initialized already!');
         }
         try {
-            if (RTCBrowserType.isReactNative()) {
+            if (browser.isReactNative()) {
                 return;
             }
 
@@ -361,7 +361,7 @@ export default class CallStats {
             // imports are only allowed at top-level, so we must use require
             // here. Sigh.
             // const CallStatsBackend
-            //     = RTCBrowserType.isReactNative()
+            //     = browser.isReactNative()
             //         ? require('react-native-callstats/callstats')
             //         : callstats;
             const CallStatsBackend = callstats;
@@ -383,7 +383,7 @@ export default class CallStats {
                 configParams = {
                     applicationVersion:
                         `${options.applicationName} (${
-                            RTCBrowserType.getBrowserName()})`
+                            browser.getName()})`
                 };
             }
 
@@ -473,17 +473,17 @@ export default class CallStats {
      *
      * @param {string} conferenceID the conference ID for which the feedback
      * will be reported.
-     * @param overallFeedback an integer between 1 and 5 indicating the
+     * @param overall an integer between 1 and 5 indicating the
      * user feedback
-     * @param detailedFeedback detailed feedback from the user. Not yet used
+     * @param comment detailed feedback from the user.
      */
-    static sendFeedback(conferenceID, overallFeedback, detailedFeedback) {
+    static sendFeedback(conferenceID, overall, comment) {
         if (CallStats.backend) {
             CallStats.backend.sendUserFeedback(
                 conferenceID, {
                     userID: CallStats.userID,
-                    overall: overallFeedback,
-                    comment: detailedFeedback
+                    overall,
+                    comment
                 });
         } else {
             logger.error('Failed to submit feedback to CallStats - no backend');

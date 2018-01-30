@@ -2,7 +2,7 @@
 
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
-import RTCBrowserType from './RTCBrowserType';
+import browser from '../browser';
 import RTCUtils from './RTCUtils';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
@@ -58,21 +58,21 @@ export default class ScreenObtainer {
      * @private
      */
     _createObtainStreamMethod() {
-        if (RTCBrowserType.isChrome() || RTCBrowserType.isOpera()) {
+        if (browser.isChrome() || browser.isOpera()) {
             initChromeExtension(this.extId);
 
             return this.obtainScreenFromExtension;
         }
-        if (RTCBrowserType.isElectron()) {
+        if (browser.isElectron()) {
             return this.obtainScreenOnElectron;
         }
-        if (RTCBrowserType.isFirefox()) {
-            if (RTCBrowserType.getFirefoxVersion() >= 52) {
+        if (browser.isFirefox()) {
+            if (browser.getFirefoxVersion() >= 52) {
                 return this._onGetStreamResponse.bind(
                     this, { streamType: 'window' });
             }
         }
-        if (RTCBrowserType.isTemasysPluginUsed()) {
+        if (browser.isTemasysPluginUsed()) {
             if (AdapterJS
                     && AdapterJS.WebRTCPlugin.plugin.isScreensharingAvailable) {
                 const sourceId = AdapterJS.WebRTCPlugin.plugin.screensharingKey;
@@ -88,8 +88,8 @@ export default class ScreenObtainer {
         }
         logger.log(
             'Screen sharing not supported by the current browser: ',
-            RTCBrowserType.getBrowserType(),
-            RTCBrowserType.getBrowserName());
+            browser.getBrowserType(),
+            browser.getBrowserName());
 
         return null;
     }
@@ -150,7 +150,7 @@ export default class ScreenObtainer {
         if (chromeExtInstalled) {
             this._doGetStreamFromExtension(streamCallback, failCallback);
         } else {
-            if (RTCBrowserType.isOpera()) {
+            if (browser.isOpera()) {
                 extOptions.extUrl = null;
                 extOptions.listener(false, getWebStoreInstallUrl(this.extId));
                 this._handleExternalInstall(
@@ -294,9 +294,9 @@ export default class ScreenObtainer {
     _onGetStreamResponse({ streamId, streamType }, onSuccess, onFailure) {
         const constraints = {};
 
-        if (RTCBrowserType.isTemasysPluginUsed()) {
+        if (browser.isTemasysPluginUsed()) {
             constraints.video = { optional: [ { sourceId: streamId } ] };
-        } else if (RTCBrowserType.isFirefox()) {
+        } else if (browser.isFirefox()) {
             constraints.video = { mediaSource: [ streamType ] };
         } else {
             constraints.video = {

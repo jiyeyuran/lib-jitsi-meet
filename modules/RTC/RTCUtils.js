@@ -7,7 +7,7 @@ import JitsiTrackError from '../../JitsiTrackError';
 import Listenable from '../util/Listenable';
 import * as MediaType from '../../service/RTC/MediaType';
 import Resolutions from '../../service/RTC/Resolutions';
-import RTCBrowserType from './RTCBrowserType';
+import browser from '../browser';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import ortcRTCPeerConnection from './ortc/RTCPeerConnection';
 import ScreenObtainer from './ScreenObtainer';
@@ -60,10 +60,10 @@ const isDeviceChangeEventSupported
         && typeof navigator.mediaDevices.ondevicechange === 'object';
 
 const isNewStyleConstraintsSupported
-    = RTCBrowserType.isFirefox()
-        || RTCBrowserType.isEdge()
-        || RTCBrowserType.isReactNative()
-        || RTCBrowserType.isTemasysPluginUsed();
+    = browser.isFirefox()
+        || browser.isEdge()
+        || browser.isReactNative()
+        || browser.isTemasysPluginUsed();
 
 /**
  *
@@ -467,7 +467,7 @@ class RTCUtils extends Listenable {
 
                 return element;
             });
-        if (RTCBrowserType.isEdge()) {
+        if (browser.isEdge()) {
             this.RTCPeerConnectionType = ortcRTCPeerConnection;
             this.getStreamID = stream => SDPUtil.filterSpecialChars(
                 stream.jitsiRemoteId || stream.id);
@@ -479,7 +479,7 @@ class RTCUtils extends Listenable {
         }
         this._initPCConstraints(options);
 
-        if (RTCBrowserType.isReactNative()) {
+        if (browser.isReactNative()) {
             return Promise.resolve();
         }
 
@@ -491,7 +491,7 @@ class RTCUtils extends Listenable {
                     onMediaDevicesListChanged,
                     () => onMediaDevicesListChanged([]));
             };
-        } else if (!RTCBrowserType.isMobile()) {
+        } else if (!browser.isMobile()) {
             setTimeout(pollForAvailableMediaDevices,
                 AVAILABLE_DEVICES_POLL_INTERVAL_TIME);
         }
@@ -577,8 +577,8 @@ class RTCUtils extends Listenable {
             let promise = Promise.resolve();
             let error;
 
-            if (RTCBrowserType.isReactNative()
-                    || RTCBrowserType.isTemasysPluginUsed()) {
+            if (browser.isReactNative()
+                    || browser.isTemasysPluginUsed()) {
                 if (hasAudio) {
                     const constraints = getConstraints([ 'audio' ], options);
 
@@ -692,7 +692,7 @@ class RTCUtils extends Listenable {
     stopMediaStream(mediaStream) {
         mediaStream.getTracks().forEach(track => {
             // stop() not supported with IE
-            if (!RTCBrowserType.isTemasysPluginUsed() && track.stop) {
+            if (!browser.isTemasysPluginUsed() && track.stop) {
                 track.stop();
             }
         });

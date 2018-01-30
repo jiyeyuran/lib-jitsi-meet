@@ -12,15 +12,15 @@ import {
     NO_DATA_FROM_SOURCE,
     TRACK_MUTE_CHANGED
 } from '../../JitsiTrackEvents';
-import RTCBrowserType from './RTCBrowserType';
+import browser from '../browser';
 import RTCUtils from './RTCUtils';
 import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import * as MediaType from '../../service/RTC/MediaType';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import VideoType from '../../service/RTC/VideoType';
 import {
-    _NO_DATA_FROM_SOURCE,
-    _TRACK_UNMUTE
+    TRACK_UNMUTED,
+    createNoDataFromSourceEvent
 } from '../../service/statistics/AnalyticsEvents';
 import Statistics from '../statistics/statistics';
 
@@ -32,7 +32,7 @@ const logger = getLogger(__filename);
  */
 export default class JitsiLocalTrack extends JitsiTrack {
     /**
-     * Constructs new JitsiLocalTrack instanse.
+     * Constructs new JitsiLocalTrack instance.
      *
      * @constructor
      * @param {Object} trackInfo
@@ -78,7 +78,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
         this.sourceId = sourceId;
         this.sourceType = sourceType;
 
-        if (RTCBrowserType.usesNewGumFlow()) {
+        if (browser.usesNewGumFlow()) {
             // Get the resolution from the track itself because it cannot be
             // certain which resolution webrtc has fallen back to using.
             this.resolution = track.getSettings().height;
@@ -90,7 +90,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
             // FIXME Currently, Firefox is ignoring our constraints about
             // resolutions so we do not store it, to avoid wrong reporting of
             // local track resolution.
-            this.resolution = RTCBrowserType.isFirefox() ? null : resolution;
+            this.resolution = browser.isFirefox() ? null : resolution;
         }
 
         this.deviceId = deviceId;
@@ -202,9 +202,13 @@ export default class JitsiLocalTrack extends JitsiTrack {
                         = setTimeout(_onNoDataFromSourceError, 3000);
                     this._setHandler('track_unmute', () => {
                         this._clearNoDataFromSourceMuteResources();
-                        Statistics.sendEventToAll(
-                            `${this.getType()}.${_TRACK_UNMUTE}`,
-                            { value: window.performance.now() - now });
+                        Statistics.sendAnalyticsAndLog(
+                            TRACK_UNMUTED,
+                            {
+                                'media_type': this.getType(),
+                                'track_type': 'local',
+                                value: window.performance.now() - now
+                            });
                     });
                 }
             });
@@ -241,10 +245,9 @@ export default class JitsiLocalTrack extends JitsiTrack {
      */
     _fireNoDataFromSourceEvent() {
         this.emit(NO_DATA_FROM_SOURCE);
-        const eventName = `${this.getType()}.${_NO_DATA_FROM_SOURCE}`;
 
-        Statistics.analytics.sendEvent(eventName);
-        const log = { name: eventName };
+        Statistics.sendAnalytics(createNoDataFromSourceEvent(this.getType()));
+        const log = { name: NO_DATA_FROM_SOURCE };
 
         if (this.isAudioTrack()) {
             log.isReceivingData = this._isReceivingData();
@@ -351,7 +354,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
         if (this.isAudioTrack()
                 || this.videoType === VideoType.DESKTOP
-                || !RTCBrowserType.doesVideoMuteByStreamRemove()) {
+                || !browser.doesVideoMuteByStreamRemove()) {
             logMuteInfo();
             if (this.track) {
                 this.track.enabled = !muted;
@@ -377,7 +380,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
                 facingMode: this.getCameraFacingMode()
             };
 
-            if (RTCBrowserType.usesNewGumFlow()) {
+            if (browser.usesNewGumFlow()) {
                 promise
                     = RTCUtils.newObtainAudioAndVideoPermissions(Object.assign(
                         {},
@@ -394,9 +397,12 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
             promise.then(streamsInfo => {
                 const mediaType = this.getType();
-                const streamInfo = streamsInfo.find(
-                        info => info.track.kind === mediaType
-                            || info.mediaType === mediaType);
+                const streamInfo
+                    = browser.usesNewGumFlow()
+                        ? streamsInfo.find(
+                            info => info.track.kind === mediaType)
+                        : streamsInfo.find(
+                            info => info.mediaType === mediaType);
 
                 if (streamInfo) {
                     this._setStream(streamInfo.stream);
@@ -702,7 +708,8 @@ export default class JitsiLocalTrack extends JitsiTrack {
     }
 
     /**
-     * Detects camera issues on ended and mute events from MediaStreamTrack.
+     * Detects camera issues, i.e. returns true if we expect this track to be
+     * receiving data from its source, but it isn't receiving data.
      *
      * @returns {boolean} true if an issue is detected and false otherwise
      */
