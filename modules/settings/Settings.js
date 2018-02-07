@@ -44,12 +44,12 @@ export default {
             const localStorage = getLocalStorage();
 
             if (localStorage) {
-                _machineId = localStorage.getItem('jitsiMeetId');
+                _machineId = localStorage.getItem('meetId');
             }
             if (!_machineId) {
                 _machineId = generateJitsiMeetId();
                 if (localStorage) {
-                    localStorage.setItem('jitsiMeetId', _machineId);
+                    localStorage.setItem('meetId', _machineId);
                 }
             }
         }

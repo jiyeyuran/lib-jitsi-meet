@@ -30,6 +30,7 @@ import RTCUIHelper from './modules/RTC/RTCUIHelper';
 import ScriptUtil from './modules/util/ScriptUtil';
 import Statistics from './modules/statistics/statistics';
 import * as VideoSIPGWConstants from './modules/videosipgw/VideoSIPGWConstants';
+import Settings from './modules/settings/Settings';
 
 const logger = Logger.getLogger(__filename);
 
@@ -472,6 +473,13 @@ export default {
     },
 
     /* eslint-enable max-params */
+
+    /**
+     * @returns the unique id of the browser.
+     */
+    getMachineId() {
+        return Settings.machineId;
+    },
 
     /**
      * Represents a hub/namespace for utility functionality which may be of

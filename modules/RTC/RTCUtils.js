@@ -1,4 +1,4 @@
-import { DEVICE_LIST } from '../../service/statistics/AnalyticsEvents';
+import { AVAILABLE_DEVICE } from '../../service/statistics/AnalyticsEvents';
 import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import EventEmitter from 'events';
 import { getLogger } from 'jitsi-meet-logger';
@@ -61,6 +61,7 @@ const isDeviceChangeEventSupported
 
 const isNewStyleConstraintsSupported
     = browser.isFirefox()
+        || browser.usesNewGumFlow()
         || browser.isEdge()
         || browser.isReactNative()
         || browser.isTemasysPluginUsed();
@@ -123,34 +124,38 @@ function getConstraints(um = [], options = {}) {
         if (!constraints.video || typeof constraints.video === 'boolean') {
             constraints.video = {};
         }
-        if (!constraints.video.optional) {
-            constraints.video.optional = [];
-        }
-        if (!constraints.video.mandatory) {
-            constraints.video.mandatory = {};
+        if (!browser.usesNewGumFlow()) {
+            if (!constraints.video.mandatory) {
+                constraints.video.mandatory = {};
+            }
+            if (!constraints.video.optional) {
+                constraints.video.optional = [];
+            }
+            if (options.minFps) {
+                constraints.video.mandatory.minFrameRate = options.minFps;
+            }
+            if (options.maxFps) {
+                constraints.video.mandatory.maxFrameRate = options.maxFps;
+            }
+            setResolutionConstraints(constraints, options.resolution);
         }
         if (options.cameraDeviceId) {
             if (isNewStyleConstraintsSupported) {
                 constraints.video.deviceId = options.cameraDeviceId;
+            } else {
+                constraints.video.optional.push({
+                    sourceId: options.cameraDeviceId
+                });
             }
-            constraints.video.optional.push({
-                sourceId: options.cameraDeviceId
-            });
         } else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
 
             if (isNewStyleConstraintsSupported) {
                 constraints.video.facingMode = facingMode;
+            } else {
+                constraints.video.optional.push({ facingMode });
             }
-            constraints.video.optional.push({ facingMode });
         }
-        if (options.minFps) {
-            constraints.video.mandatory.minFrameRate = options.minFps;
-        }
-        if (options.maxFps) {
-            constraints.video.mandatory.maxFrameRate = options.maxFps;
-        }
-        setResolutionConstraints(constraints, options.resolution);
     } else {
         constraints.video = false;
     }
@@ -166,10 +171,11 @@ function getConstraints(um = [], options = {}) {
             if (isNewStyleConstraintsSupported) {
                 // New style of setting device id.
                 constraints.audio.deviceId = options.micDeviceId;
+            } else {
+                constraints.video.optional.push({
+                    sourceId: options.micDeviceId
+                });
             }
-            constraints.video.optional.push({
-                sourceId: options.micDeviceId
-            });
         }
         constraints.audio.optional.push(
             { echoCancellation: !disableAEC && !disableAP },
@@ -246,19 +252,29 @@ function pollForAvailableMediaDevices() {
  * @returns {void}
  */
 function sendDeviceListToAnalytics(deviceList) {
-    const devicesPropsArray
-        = deviceList.map(
-            ({ deviceId, groupId, kind, label }) => {
-                // Filter the props of the device object.
-                return {
-                    deviceId,
-                    groupId,
-                    kind,
-                    label
-                };
-            });
+    const audioInputDeviceCount
+        = deviceList.filter(d => d.kind === 'audioinput').length;
+    const audioOutputDeviceCount
+        = deviceList.filter(d => d.kind === 'audiooutput').length;
+    const videoInputDeviceCount
+        = deviceList.filter(d => d.kind === 'videoinput').length;
+    const videoOutputDeviceCount
+        = deviceList.filter(d => d.kind === 'videooutput').length;
 
-    Statistics.analytics.sendEvent(DEVICE_LIST, { devices: devicesPropsArray });
+    deviceList.forEach(device => {
+        const attributes = {
+            'audio_input_device_count': audioInputDeviceCount,
+            'audio_output_device_count': audioOutputDeviceCount,
+            'video_input_device_count': videoInputDeviceCount,
+            'video_output_device_count': videoOutputDeviceCount,
+            'device_id': device.deviceId,
+            'device_group_id': device.groupId,
+            'device_kind': device.kind,
+            'device_label': device.label
+        };
+
+        Statistics.sendAnalytics(AVAILABLE_DEVICE, attributes);
+    });
 }
 
 /**

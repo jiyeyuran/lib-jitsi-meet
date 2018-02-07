@@ -311,10 +311,10 @@ StatsCollector.prototype.start = function(startAudioLevelStats) {
                         } else {
                             results = report.result();
                         }
-                        self.currentAudioLevelsReport = results;
-                        self.processAudioLevelReport();
                         self.baselineAudioLevelsReport
                             = self.currentAudioLevelsReport;
+                        self.currentAudioLevelsReport = results;
+                        self.processAudioLevelReport();
                     },
                     self.errorCallback
                 );

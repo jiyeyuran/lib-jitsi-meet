@@ -647,19 +647,11 @@ export default class JingleSessionPC extends JingleSession {
         // the assumption that candidates are spawned after the offer/answer
         // and XMPP preserves order).
         const workFunction = finishedCallback => {
-            if (!this.peerconnection.remoteDescription
-                    || !this.peerconnection.remoteDescription.sdp) {
-                setTimeout(() => {
-                    this.modificationQueue.push(workFunction);
-                }, 50);
-
-                return;
-            }
             for (const iceCandidate of iceCandidates) {
                 this.peerconnection.addIceCandidate(
                     iceCandidate,
                     () => {
-                        logger.debug('addIceCandidate ok!');
+                        logger.info('addIceCandidate ok!');
                     },
                     error => {
                         logger.error('addIceCandidate failed!', error);
