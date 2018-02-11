@@ -521,7 +521,7 @@ class RTCUtils extends Listenable {
                     onMediaDevicesListChanged,
                     () => onMediaDevicesListChanged([]));
             };
-        } else if (!browser.isMobile()) {
+        } else if (typeof window.orientation === 'undefined') {
             setTimeout(pollForAvailableMediaDevices,
                 AVAILABLE_DEVICES_POLL_INTERVAL_TIME);
         }
