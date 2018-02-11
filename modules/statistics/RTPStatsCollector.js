@@ -1,15 +1,16 @@
-import browser, { browsers } from '../browser';
+import browser from '../browser';
+import { browsers } from 'js-utils';
+
 import * as StatisticsEvents from '../../service/statistics/Events';
 
 const GlobalOnErrorHandler = require('../util/GlobalOnErrorHandler');
 const logger = require('jitsi-meet-logger').getLogger(__filename);
 
 /* Whether we support the browser we are running into for logging statistics */
-// const browserSupported = browser.isChrome()
-//         || browser.isOpera() || browser.isFirefox()
-//         || browser.isNWJS() || browser.isElectron()
-//         || browser.isTemasysPluginUsed() || browser.isEdge();
-const browserSupported = true;
+const browserSupported = browser.isChrome()
+        || browser.isOpera() || browser.isFirefox()
+        || browser.isNWJS() || browser.isElectron()
+        || browser.isTemasysPluginUsed() || browser.isEdge();
 
 /**
  * The lib-jitsi-meet browser-agnostic names of the browser-specific keys
