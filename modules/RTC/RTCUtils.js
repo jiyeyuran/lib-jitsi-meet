@@ -115,6 +115,20 @@ function setResolutionConstraints(constraints, resolution) {
  * @returns {Object}
  */
 function getConstraints(um = [], options = {}) {
+    if (browser.isSafari()) {
+        const ratio = options.resolution > 320 ? 2 : 1;
+        const video = um.indexOf('video') >= 0 ? {
+            width: 320 * ratio,
+            height: 240 * ratio,
+            facingMode: options.facingMode || CameraFacingMode.USER
+        } : false;
+
+        return {
+            audio: um.indexOf('audio') >= 0,
+            video
+        };
+    }
+
     // Create a deep copy of the constraints to avoid any modification of
     // the passed in constraints object.
     const constraints = JSON.parse(JSON.stringify(options.constraints || {}));
