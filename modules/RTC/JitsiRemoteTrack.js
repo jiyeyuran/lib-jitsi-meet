@@ -1,6 +1,7 @@
 import { createTtfmEvent } from '../../service/statistics/AnalyticsEvents';
 import JitsiTrack from './JitsiTrack';
 import * as JitsiTrackEvents from '../../JitsiTrackEvents';
+import browser from '../browser';
 import Statistics from '../statistics/statistics';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
@@ -92,8 +93,14 @@ export default class JitsiRemoteTrack extends JitsiTrack {
         // 2. It does mix MediaStream('inactive') with MediaStreamTrack events
         // 3. Allowing to bind more than one event handler requires too much
         //    refactoring around camera issues detection.
-        this._setHandler('track_mute', () => this._onTrackMute());
-        this._setHandler('track_unmute', () => this._onTrackUnmute());
+        if (this.track.addEventListener) {
+            this.track.addEventListener('mute', () => this._onTrackMute());
+            this.track.addEventListener('unmute', () => this._onTrackUnmute());
+        } else if (this.track.attachEvent) {
+            // FIXME Internet Explorer is not emitting out mute/unmute events.
+            this.track.attachEvent('onmute', () => this._onTrackMute());
+            this.track.attachEvent('onunmute', () => this._onTrackUnmute());
+        }
     }
 
     /**
@@ -256,7 +263,21 @@ export default class JitsiRemoteTrack extends JitsiTrack {
             ttfmTrackerVideoAttached = true;
         }
 
-        container.addEventListener('canplay', this._playCallback.bind(this));
+        if (browser.isTemasysPluginUsed()) {
+            // XXX Don't require Temasys unless it's to be used because it
+            // doesn't run on React Native, for example.
+            const AdapterJS = require('./adapter.screenshare');
+
+            // FIXME: this is not working for IE11
+            AdapterJS.addEvent(
+                container,
+                'play',
+                this._playCallback.bind(this));
+        } else {
+            container.addEventListener(
+                'canplay',
+                this._playCallback.bind(this));
+        }
     }
 
     /**

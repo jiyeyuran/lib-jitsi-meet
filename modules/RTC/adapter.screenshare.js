@@ -205,7 +205,7 @@ AdapterJS.maybeThroughWebRTCReady = function() {
 // Text namespace
 AdapterJS.TEXT = {
   PLUGIN: {
-    REQUIRE_INSTALLATION: '简会需要当前浏览器安装WebRTC插件才能正常运行，建议使用Chrome或Firefox。',
+    REQUIRE_INSTALLATION: '当前浏览器需要安装插件才能运行，建议使用Chrome浏览器。',
     NOT_SUPPORTED: '您的浏览器不支持WebRTC技术。',
     BUTTON: '立即安装'
   },

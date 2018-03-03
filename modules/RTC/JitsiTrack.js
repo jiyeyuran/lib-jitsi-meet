@@ -3,8 +3,8 @@ import EventEmitter from 'events';
 import { getLogger } from 'jitsi-meet-logger';
 import * as JitsiTrackEvents from '../../JitsiTrackEvents';
 import * as MediaType from '../../service/RTC/MediaType';
-import VideoType from '../../service/RTC/VideoType';
 import RTCUtils from './RTCUtils';
+import VideoType from '../../service/RTC/VideoType';
 
 const logger = getLogger(__filename);
 
@@ -115,21 +115,10 @@ export default class JitsiTrack extends EventEmitter {
         }
 
         if (this.stream) {
-            this.track[trackHandler2Prop[type]] = handler;
-        }
-    }
-
-    /**
-     * Registers all event handlers bound to the underlying media stream/track
-     * @private
-     */
-    _registerHandlers() {
-        for (const [ type, handler ] of this.handlers) {
-            this._setHandler(type, handler);
-        }
-        if (this.stream && this._streamInactiveHandler) {
-            addMediaStreamInactiveHandler(
-                this.stream, this._streamInactiveHandler);
+            // FIXME Why only video tracks?
+            for (const track of this.stream.getVideoTracks()) {
+                track[trackHandler2Prop[type]] = handler;
+            }
         }
     }
 
@@ -138,10 +127,20 @@ export default class JitsiTrack extends EventEmitter {
      * @private
      */
     _unregisterHandlers() {
-        for (const type of this.handlers.keys()) {
-            this._setHandler(type, undefined);
+        if (!this.stream) {
+            logger.warn(
+                `${this}: unable to unregister handlers - no stream object`);
+
+            return;
         }
-        if (this.stream && this._streamInactiveHandler) {
+
+        for (const type of this.handlers.keys()) {
+            // FIXME Why only video tracks?
+            for (const videoTrack of this.stream.getVideoTracks()) {
+                videoTrack[trackHandler2Prop[type]] = undefined;
+            }
+        }
+        if (this._streamInactiveHandler) {
             addMediaStreamInactiveHandler(this.stream, undefined);
         }
     }
@@ -157,19 +156,21 @@ export default class JitsiTrack extends EventEmitter {
         if (this.stream === stream) {
             return;
         }
-        if (stream) {
-            const tracks = this.isVideoTrack()
-                ? stream.getVideoTracks() : stream.getAudioTracks();
 
-            if (tracks.length > 0) {
-                this.track = tracks[0];
-            }
-        } else {
-            this._unregisterHandlers();
-        }
         this.stream = stream;
-        if (stream) {
-            this._registerHandlers();
+
+        // TODO Practically, that's like the opposite of _unregisterHandlers
+        // i.e. may be abstracted into a function/method called
+        // _registerHandlers for clarity and easing the maintenance of the two
+        // pieces of source code.
+        if (this.stream) {
+            for (const type of this.handlers.keys()) {
+                this._setHandler(type, this.handlers.get(type));
+            }
+            if (this._streamInactiveHandler) {
+                addMediaStreamInactiveHandler(
+                    this.stream, this._streamInactiveHandler);
+            }
         }
     }
 

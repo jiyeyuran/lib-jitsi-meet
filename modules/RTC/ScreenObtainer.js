@@ -3,7 +3,6 @@
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
 import browser from '../browser';
-import RTCUtils from './RTCUtils';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
 
@@ -16,7 +15,7 @@ let chromeExtInstalled = false;
 /**
  * Handles obtaining a stream from a screen capture on different browsers.
  */
-export default class ScreenObtainer {
+class ScreenObtainer {
     /**
      * Initializes the function used to obtain a screen capture
      * (this.obtainStream).
@@ -27,16 +26,18 @@ export default class ScreenObtainer {
      * @param {boolean} [options.desktopSharingChromeExtId]
      * @param {boolean} [options.desktopSharingFirefoxDisabled]
      * @param {boolean} [options.desktopSharingFirefoxExtId] (deprecated)
+     * @param {Function} gum GUM method
      */
-    constructor(options = {
+    init(options = {
         disableDesktopSharing: false,
         desktopSharingChromeDisabled: false,
         desktopSharingChromeExtId: null,
         desktopSharingFirefoxDisabled: false,
         desktopSharingFirefoxExtId: null
-    }) {
+    }, gum) {
         // eslint-disable-next-line no-param-reassign
         this.options = options = options || {};
+        this.gumFunction = gum;
         this.extId = options.desktopSharingChromeExtId;
 
         this.obtainStream
@@ -58,19 +59,77 @@ export default class ScreenObtainer {
      * @private
      */
     _createObtainStreamMethod() {
-        if (browser.isChrome() || browser.isOpera()) {
-            initChromeExtension(this.extId);
+        if (browser.isNWJS()) {
+            return (_, onSuccess, onFailure) => {
+                window.JitsiMeetNW.obtainDesktopStream(
+                    onSuccess,
+                    (error, constraints) => {
+                        let jitsiError;
 
-            return this.obtainScreenFromExtension;
+                        // FIXME:
+                        // This is very very dirty fix for recognising that the
+                        // user have clicked the cancel button from the Desktop
+                        // sharing pick window. The proper solution would be to
+                        // detect this in the NWJS application by checking the
+                        // streamId === "". Even better solution would be to
+                        // stop calling GUM from the NWJS app and just pass the
+                        // streamId to lib-jitsi-meet. This way the desktop
+                        // sharing implementation for NWJS and chrome extension
+                        // will be the same and lib-jitsi-meet will be able to
+                        // control the constraints, check the streamId, etc.
+                        //
+                        // I cannot find documentation about "InvalidStateError"
+                        // but this is what we are receiving from GUM when the
+                        // streamId for the desktop sharing is "".
+
+                        if (error && error.name === 'InvalidStateError') {
+                            jitsiError = new JitsiTrackError(
+                                JitsiTrackErrors.CHROME_EXTENSION_USER_CANCELED
+                            );
+                        } else {
+                            jitsiError = new JitsiTrackError(
+                                error, constraints, [ 'desktop' ]);
+                        }
+                        (typeof onFailure === 'function')
+                            && onFailure(jitsiError);
+                    });
+            };
         }
         if (browser.isElectron()) {
             return this.obtainScreenOnElectron;
         }
-        if (browser.isFirefox()) {
-            if (browser.getFirefoxVersion() >= 52) {
-                return this._onGetStreamResponse.bind(
-                    this, { streamType: 'window' });
+        if (browser.isChrome() || browser.isOpera()) {
+            if (browser.isVersionLessThan('34')) {
+                logger.info('Chrome extension not supported until ver 34');
+
+                return null;
+            } else if (this.options.desktopSharingChromeDisabled
+                || !this.extId) {
+
+                return null;
             }
+
+            logger.info('Using Chrome extension for desktop sharing');
+            initChromeExtension(this.extId);
+
+            return this.obtainScreenFromExtension;
+        }
+        if (browser.isFirefox()) {
+            if (this.options.desktopSharingFirefoxDisabled) {
+                return null;
+            } else if (browser.isVersionLessThan('52')) {
+                logger.info('Firefox screensharing not supported until ver 52');
+
+                return null;
+            } else if (window.location.protocol === 'http:') {
+                logger.log('Screen sharing is not supported over HTTP. '
+                    + 'Use of HTTPS is required.');
+
+                return null;
+            }
+
+            return this._onGetStreamResponse.bind(
+                this, { streamType: 'window' });
         }
         if (browser.isTemasysPluginUsed()) {
             if (AdapterJS
@@ -116,17 +175,21 @@ export default class ScreenObtainer {
     obtainScreenOnElectron(options = {}, onSuccess, onFailure) {
         if (window.JitsiMeetScreenObtainer
             && window.JitsiMeetScreenObtainer.openDesktopPicker) {
+            const { desktopSharingSources, gumOptions } = options;
+
             window.JitsiMeetScreenObtainer.openDesktopPicker(
                 {
-                    desktopSharingSources:
-                        options.desktopSharingSources
-                            || this.options.desktopSharingChromeSources
+                    desktopSharingSources: desktopSharingSources
+                        || this.options.desktopSharingChromeSources
                 },
                 (streamId, streamType) =>
                     this._onGetStreamResponse(
                         {
-                            streamId,
-                            streamType
+                            response: {
+                                streamId,
+                                streamType
+                            },
+                            gumOptions
                         },
                         onSuccess,
                         onFailure
@@ -148,7 +211,8 @@ export default class ScreenObtainer {
      */
     obtainScreenFromExtension(extOptions, streamCallback, failCallback) {
         if (chromeExtInstalled) {
-            this._doGetStreamFromExtension(streamCallback, failCallback);
+            this._doGetStreamFromExtension(
+                extOptions, streamCallback, failCallback);
         } else {
             if (browser.isOpera()) {
                 extOptions.extUrl = null;
@@ -166,7 +230,7 @@ export default class ScreenObtainer {
                 } else {
                     chromeExtInstalled = true;
                     this._doGetStreamFromExtension(
-                        streamCallback, failCallback);
+                        extOptions, streamCallback, failCallback);
                 }
 
                 return;
@@ -179,14 +243,14 @@ export default class ScreenObtainer {
             }
 
             this._installExtFromChromeStore(
-                streamCallback, failCallback);
+                extOptions, streamCallback, failCallback);
         }
     }
 
     /**
      * Install extension from chrome store.
      */
-    _installExtFromChromeStore(streamCallback, failCallback) {
+    _installExtFromChromeStore(extOptions, streamCallback, failCallback) {
         try {
             window.chrome.webstore.install(
                 getWebStoreInstallUrl(this.extId),
@@ -201,7 +265,7 @@ export default class ScreenObtainer {
                                 clearInterval(t);
                                 chromeExtInstalled = true;
                                 this._doGetStreamFromExtension(
-                                    streamCallback, failCallback);
+                                    extOptions, streamCallback, failCallback);
                             } else if (maxRetries++ > 60) {
                                 clearInterval(t);
                             }
@@ -222,27 +286,27 @@ export default class ScreenObtainer {
     /**
      * Install extension from external url.
      */
-    _handleExternalInstall(options, streamCallback, failCallback) {
+    _handleExternalInstall(extOptions, streamCallback, failCallback) {
         const now = new Date();
         const maxWaitDur = 1 * 60 * 1000;
 
-        window.open(options.extUrl);
+        window.open(extOptions.extUrl);
         const t = setInterval(() => {
             checkChromeExtInstalled(this.extId, ok => {
                 if (ok) {
                     chromeExtInstalled = true;
                     this._doGetStreamFromExtension(
-                        streamCallback, failCallback);
-                    options.listener(true);
+                        extOptions, streamCallback, failCallback);
+                    extOptions.listener(true);
                     clearInterval(t);
-                } else if (options.checkAgain() === false
+                } else if (extOptions.checkAgain() === false
                     || (new Date() - now) > maxWaitDur) {
                     failCallback(
                         JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR);
                     clearInterval(t);
                 }
             });
-        }, options.interval);
+        }, extOptions.interval);
     }
 
     /**
@@ -251,33 +315,40 @@ export default class ScreenObtainer {
      * @param streamCallback
      * @param failCallback
      */
-    _doGetStreamFromExtension(streamCallback, failCallback) {
+    _doGetStreamFromExtension(options, streamCallback, failCallback) {
+        const {
+            desktopSharingChromeSources
+        } = this.options;
+
         window.chrome.runtime.sendMessage(
             this.extId,
             {
                 getStream: true,
-                sources: this.options.desktopSharingChromeSources
+                sources:
+                    options.desktopSharingSources || desktopSharingChromeSources
             },
             response => {
                 if (!response) {
-                    logger.error('chrome last error: ',
-                        window.chrome.runtime.lastError);
+                    // possibly re-wraping error message to make code consistent
+                    const lastError = window.chrome.runtime.lastError;
 
-                    failCallback(
-                        JitsiTrackErrors.CHROME_EXTENSION_INSTALLATION_ERROR,
-                        window.chrome.runtime.lastError);
-
-                    return;
-                }
-                if (!response.streamId) {
-                    failCallback(new JitsiTrackError(
-                        JitsiTrackErrors.CHROME_EXTENSION_USER_CANCELED));
+                    failCallback(lastError instanceof Error
+                        ? lastError
+                        : new JitsiTrackError(
+                            JitsiTrackErrors.CHROME_EXTENSION_GENERIC_ERROR,
+                            lastError));
 
                     return;
                 }
                 logger.log('Response from extension: ', response);
                 this._onGetStreamResponse(
-                    response, streamCallback, failCallback);
+                    {
+                        response,
+                        gumOptions: options.gumOptions
+                    },
+                    streamCallback,
+                    failCallback
+                );
             }
         );
     }
@@ -285,41 +356,53 @@ export default class ScreenObtainer {
     /**
      * Handles response from external application / extension and calls GUM to
      * receive the desktop streams or reports error.
-     * @param {object} response
-     * @param {string} response.streamId - the streamId for the desktop stream
-     * @param {string} response.error - error to be reported.
+     * @param {object} options
+     * @param {object} options.response
+     * @param {string} options.response.streamId - the streamId for the desktop
+     * stream.
+     * @param {string} options.response.error - error to be reported.
+     * @param {object} options.gumOptions - options passed to GUM.
      * @param {Function} onSuccess - callback for success.
      * @param {Function} onFailure - callback for failure.
+     * @param {object} gumOptions - options passed to GUM.
      */
-    _onGetStreamResponse({ streamId, streamType }, onSuccess, onFailure) {
-        const constraints = {};
+    _onGetStreamResponse(
+            options = {
+                response: {},
+                gumOptions: {}
+            },
+            onSuccess,
+            onFailure) {
+        const { streamId, streamType, error } = options.response || {};
 
-        if (browser.isTemasysPluginUsed()) {
-            constraints.video = { optional: [ { sourceId: streamId } ] };
-        } else if (browser.isFirefox()) {
-            constraints.video = { mediaSource: [ streamType ] };
+        if (streamId) {
+            this.gumFunction(
+                [ 'desktop' ],
+                stream => onSuccess({
+                    stream,
+                    sourceId: streamId,
+                    sourceType: streamType
+                }),
+                onFailure,
+                {
+                    desktopStream: streamId,
+                    ...options.gumOptions
+                });
         } else {
-            constraints.video = {
-                mandatory: {
-                    chromeMediaSource: 'desktop',
-                    chromeMediaSourceId: streamId,
-                    maxWidth: window.screen.width,
-                    maxHeight: window.screen.height,
-                    maxFrameRate: this.options.maxScreenFps || 3
-                }
-            };
-        }
-        RTCUtils.getUserMedia(constraints).then(stream => {
-            onSuccess({
-                stream,
-                sourceId: streamId,
-                sourceType: streamType
-            });
-        })
-        .catch(err => {
+            // As noted in Chrome Desktop Capture API:
+            // If user didn't select any source (i.e. canceled the prompt)
+            // then the callback is called with an empty streamId.
+            if (streamId === '') {
+                onFailure(new JitsiTrackError(
+                    JitsiTrackErrors.CHROME_EXTENSION_USER_CANCELED));
+
+                return;
+            }
+
             onFailure(new JitsiTrackError(
-                err, constraints, [ 'desktop' ]));
-        });
+                JitsiTrackErrors.CHROME_EXTENSION_GENERIC_ERROR,
+                error));
+        }
     }
 }
 
@@ -377,3 +460,5 @@ function initInlineInstall(extId) {
 function getWebStoreInstallUrl(extId) {
     return `https://chrome.google.com/webstore/detail/${extId}`;
 }
+
+export default new ScreenObtainer();

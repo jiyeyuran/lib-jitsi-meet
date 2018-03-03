@@ -2640,9 +2640,9 @@ js-tokens@^3.0.0, js-tokens@^3.0.2:
   version "3.0.2"
   resolved "https://registry.npmjs.org/js-tokens/-/js-tokens-3.0.2.tgz#9866df395102130e38f7f996bceb65443209c25b"
 
-"js-utils@github:jitsi/js-utils#fa6eb93d1792b75e25bf84b97e51672e70d900de":
+"js-utils@github:jitsi/js-utils#d4b78721b754a15c2588b7b0c621a9fff6fa1363":
   version "0.0.0"
-  resolved "https://codeload.github.com/jitsi/js-utils/tar.gz/fa6eb93d1792b75e25bf84b97e51672e70d900de"
+  resolved "https://codeload.github.com/jitsi/js-utils/tar.gz/d4b78721b754a15c2588b7b0c621a9fff6fa1363"
   dependencies:
     bowser "1.9.1"
 

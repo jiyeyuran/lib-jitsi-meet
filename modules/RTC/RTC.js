@@ -393,6 +393,13 @@ export default class RTC extends Listenable {
 
     /**
      *
+     */
+    static isRTCReady() {
+        return RTCUtils.isRTCReady();
+    }
+
+    /**
+     *
      * @param options
      */
     static init(options = {}) {
@@ -487,6 +494,8 @@ export default class RTC extends Listenable {
         }
 
         this.localTracks.push(track);
+
+        track.conference = this.conference;
     }
 
     /**
