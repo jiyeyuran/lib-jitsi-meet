@@ -157,7 +157,8 @@ function initRawEnumerateDevicesWithCallback() {
 // 'devicechange' event can be found in spec -
 // http://w3c.github.io/mediacapture-main/#event-mediadevices-devicechange
 // TODO: check MS Edge
-const isDeviceChangeEventSupported = 'ondevicechange' in navigator.mediaDevices;
+const isDeviceChangeEventSupported
+    = navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices;
 
 let rtcReady = false;
 

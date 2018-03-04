@@ -147,8 +147,7 @@ class ScreenObtainer {
         }
         logger.log(
             'Screen sharing not supported by the current browser: ',
-            browser.getBrowserType(),
-            browser.getBrowserName());
+            browser.getName());
 
         return null;
     }

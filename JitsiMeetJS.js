@@ -319,7 +319,7 @@ export default {
 
                 if (error.name === JitsiTrackErrors.UNSUPPORTED_RESOLUTION
                     && !browser.usesNewGumFlow()) {
-                    const oldResolution = options.resolution || '720';
+                    const oldResolution = options.resolution || '360';
                     const newResolution = getLowerResolution(oldResolution);
 
                     if (newResolution !== null) {
