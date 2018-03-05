@@ -1511,9 +1511,11 @@ class RTCUtils extends Listenable {
         return new Promise((resolve, reject) => {
             const deviceGUM = {
                 audio: (...args) =>
-                    this.getUserMediaWithConstraints([ 'audio' ], ...args),
+                    this.getUserMediaWithConstraints(
+                        [ 'audio' ], ...args, options),
                 video: (...args) =>
-                    this.getUserMediaWithConstraints([ 'video' ], ...args),
+                    this.getUserMediaWithConstraints(
+                        [ 'video' ], ...args, options),
                 desktop: (...args) =>
                     screenObtainer.obtainStream(
                         this._parseDesktopSharingOptions(options), ...args)
