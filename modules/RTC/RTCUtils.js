@@ -138,7 +138,8 @@ function initRawEnumerateDevicesWithCallback() {
             // "ReferenceError: Can't find variable: MediaStreamTrack" when
             // Temasys plugin is not installed yet, have to delay this call
             // until WebRTC is ready.
-            : MediaStreamTrack && MediaStreamTrack.getSources
+            : typeof MediaStreamTrack !== 'undefined'
+                && MediaStreamTrack.getSources
                 ? function(callback) {
                     MediaStreamTrack.getSources(
                         sources =>
@@ -244,9 +245,7 @@ function getConstraints(um, options = {}) {
             }
 
             // Old style.
-            constraints.video.optional.push({
-                sourceId: options.cameraDeviceId
-            });
+            constraints.video.mandatory.sourceId = options.cameraDeviceId;
         } else {
             // Prefer the front i.e. user-facing camera (to the back i.e.
             // environment-facing camera, for example).
@@ -1431,7 +1430,7 @@ class RTCUtils extends Listenable {
                     this.stopMediaStream(avStream);
 
                     return this.getUserMediaWithConstraints(
-                        missingTracks, options)
+                        missingTracks, null, null, options)
 
                         // GUM has already failed earlier and this success
                         // handling should not be reached.
