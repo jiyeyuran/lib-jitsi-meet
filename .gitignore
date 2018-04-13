@@ -8,3 +8,4 @@ deploy-local.sh
 lib-jitsi-meet.*
 npm-*.log
 .sync-config.cson
+yarn.lock
