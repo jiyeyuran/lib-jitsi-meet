@@ -935,6 +935,7 @@ export default class ChatRoom extends Listenable {
                         + '>not-allowed['
                         + 'xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"]')
                 .length) {
+            const content = $(pres).find('>error>not-allowed').text();
             const toDomain = Strophe.getDomainFromJid(pres.getAttribute('to'));
 
             if (toDomain === this.xmpp.options.hosts.anonymousdomain) {
@@ -942,17 +943,19 @@ export default class ChatRoom extends Listenable {
                 // result in reconnection from authorized domain.
                 // We're either missing Jicofo/Prosody config for anonymous
                 // domains or something is wrong.
-                this.eventEmitter.emit(XMPPEvents.ROOM_JOIN_ERROR);
+                this.eventEmitter.emit(XMPPEvents.ROOM_JOIN_ERROR, content);
 
             } else {
                 logger.warn('onPresError ', pres);
                 this.eventEmitter.emit(
-                    XMPPEvents.ROOM_CONNECT_NOT_ALLOWED_ERROR);
+                    XMPPEvents.ROOM_CONNECT_NOT_ALLOWED_ERROR, content);
             }
         } else if ($(pres).find('>error>service-unavailable').length) {
             logger.warn('Maximum users limit for the room has been reached',
                 pres);
-            this.eventEmitter.emit(XMPPEvents.ROOM_MAX_USERS_ERROR);
+            const content = $(pres).find('>error>service-unavailable').text();
+
+            this.eventEmitter.emit(XMPPEvents.ROOM_MAX_USERS_ERROR, content);
         } else {
             logger.warn('onPresError ', pres);
             this.eventEmitter.emit(XMPPEvents.ROOM_CONNECT_ERROR);
