@@ -42,6 +42,7 @@ import VideoType from './service/RTC/VideoType';
 import VideoSIPGW from './modules/videosipgw/VideoSIPGW';
 import * as VideoSIPGWConstants from './modules/videosipgw/VideoSIPGWConstants';
 import * as XMPPEvents from './service/xmpp/XMPPEvents';
+import { JITSI_MEET_MUC_TOPIC } from './modules/xmpp/ChatRoom';
 
 import SpeakerStatsCollector from './modules/statistics/SpeakerStatsCollector';
 
@@ -272,7 +273,7 @@ JitsiConference.prototype._init = function(options = {}) {
             callStatsConfIDNamespace:
                 config.callStatsConfIDNamespace
                     || (config.hosts && config.hosts.domain),
-            callStatsCustomScriptUrl: config.callStatsCustomScriptUrl,
+            customScriptUrl: config.callStatsCustomScriptUrl,
             callStatsID: config.callStatsID,
             callStatsSecret: config.callStatsSecret,
             roomName: this.options.name,
@@ -567,6 +568,7 @@ JitsiConference.prototype.removeCommandListener = function(command) {
 /**
  * Sends text message to the other participants in the conference
  * @param message the text message.
+ * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.sendTextMessage = function(message, nick) {
     if (this.room) {
@@ -577,6 +579,7 @@ JitsiConference.prototype.sendTextMessage = function(message, nick) {
 /**
  * Send private text message to another participant of the conference
  * @param message the text message.
+ * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.sendPrivateTextMessage = function(id, message) {
     if (this.room) {
@@ -1253,6 +1256,19 @@ JitsiConference.prototype.onDisplayNameChanged = function(jid, displayName) {
         JitsiConferenceEvents.DISPLAY_NAME_CHANGED,
         id,
         displayName);
+};
+
+/**
+ * Callback invoked when a known live stream URL has been updated.
+ *
+ * @params {*} ...args - Information regarding which participant has an updated
+ * live stream URL and what that live stream URL is.
+ * @returns {void}
+ */
+JitsiConference.prototype.onLiveStreamURLChange = function(...args) {
+    this.eventEmitter.emit(
+        JitsiConferenceEvents.LIVE_STREAM_URL_CHANGED,
+        ...args);
 };
 
 /**
@@ -2038,6 +2054,7 @@ JitsiConference.prototype._isFocus = function(mucJid) {
  * If "" the message will be sent to all participants.
  * @param payload {object} the payload of the message.
  * @throws NetworkError or InvalidStateError or Error if the operation fails.
+ * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.sendEndpointMessage = function(to, payload) {
     this.rtc.sendChannelMessage(to, payload);
@@ -2047,9 +2064,72 @@ JitsiConference.prototype.sendEndpointMessage = function(to, payload) {
  * Sends a broadcast message via the data channel.
  * @param payload {object} the payload of the message.
  * @throws NetworkError or InvalidStateError or Error if the operation fails.
+ * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.broadcastEndpointMessage = function(payload) {
     this.sendEndpointMessage('', payload);
+};
+
+/**
+ * Sends a message to a given endpoint (if 'to' is a non-empty string), or
+ * broadcasts it to all endpoints in the conference.
+ * @param {string} to The ID of the endpoint/participant which is to receive
+ * the message, or '' to broadcast the message to all endpoints in the
+ * conference.
+ * @param {string|object} message the message to send. If this is of type
+ * 'string' it will be sent as a chat message. If it is of type 'object', it
+ * will be encapsulated in a format recognized by jitsi-meet and converted to
+ * JSON before being sent.
+ * @param {boolean} sendThroughVideobridge Whether to send the message through
+ * jitsi-videobridge (via the COLIBRI data channel or web socket), or through
+ * the XMPP MUC. Currently only objects can be sent through jitsi-videobridge.
+ */
+JitsiConference.prototype.sendMessage = function(
+        message,
+        to = '',
+        sendThroughVideobridge = false) {
+    const messageType = typeof message;
+
+    // Through videobridge we support only objects. Through XMPP we support
+    // objects (encapsulated in a specific JSON format) and strings (i.e.
+    // regular chat messages).
+    if (messageType !== 'object'
+            && (sendThroughVideobridge || messageType !== 'string')) {
+        logger.error(`Can not send a message of type ${messageType}`);
+
+        return;
+    }
+
+    if (sendThroughVideobridge) {
+        this.sendEndpointMessage(to, message);
+    } else {
+        let messageToSend = message;
+
+        if (messageType === 'object') {
+            // Encapsulate the object in the jitsi-meet format, and convert it
+            // to JSON.
+            messageToSend = {
+                payload: message,
+                [JITSI_MEET_MUC_TOPIC]: ''
+            };
+
+            try {
+                messageToSend = JSON.stringify(messageToSend);
+            } catch (e) {
+                logger.error('Can not send a message, stringify failed: ', e);
+
+                return;
+            }
+        }
+
+        if (to) {
+            this.sendPrivateTextMessage(to, messageToSend);
+        } else {
+            // Broadcast
+            this.sendTextMessage(messageToSend);
+        }
+    }
+
 };
 
 JitsiConference.prototype.isConnectionInterrupted = function() {

@@ -75,10 +75,13 @@ function filterNodeFromPresenceJSON(pres, nodeName) {
 }
 
 /**
- * Constants used to verify if a given JSON message via the MUC should be
- * considered as a ENDPOINT_MESSAGE
+ * The name of the field used to recognize a chat message as carrying a JSON
+ * payload from another endpoint.
+ * If the body of a chat message contains a valid JSON object, and the JSON has
+ * this key, then the transported payload is contained in the 'payload'
+ * property of the JSON object.
  */
-const VALID_FIELD_NAMES = [ 'jitsi-meet-muc-msg-topic', 'payload' ];
+export const JITSI_MEET_MUC_TOPIC = 'jitsi-meet-muc-msg-topic';
 
 /**
  * Check if the given argument is a valid JSON ENDPOINT_MESSAGE string by
@@ -102,13 +105,11 @@ function tryParseJSONAndVerify(jsonString) {
         // so we must check for that, too.
         // Thankfully, null is falsey, so this suffices:
         if (json && typeof json === 'object') {
-            const topic = json[VALID_FIELD_NAMES[0]];
-            const payload = json[VALID_FIELD_NAMES[1]];
+            const topic = json[JITSI_MEET_MUC_TOPIC];
+            const payload = json.payload;
 
-            if ((typeof topic === 'string' || topic instanceof String)
-                && payload) {
-
-                return json;
+            if ((typeof topic !== 'undefined') && payload) {
+                return payload;
             }
 
             logger.debug('parsing valid json but does not have correct '
@@ -418,6 +419,18 @@ export default class ChatRoom extends Listenable {
                 && this.options.hiddenDomain
                     === jid.substring(jid.indexOf('@') + 1, jid.indexOf('/'));
 
+        // Check isHiddenDomain as a way to verify a live stream URL is from a
+        // trusted source. This prevents users from trying to display arbitrary
+        // live stream URLs.
+        if (member.isHiddenDomain) {
+            const liveStreamViewURLItem
+                = pres.getElementsByTagName('live-stream-view-url')[0];
+
+            if (liveStreamViewURLItem) {
+                member.liveStreamViewURL = liveStreamViewURLItem.textContent;
+            }
+        }
+
         const xEl = pres.querySelector('x');
 
         if (xEl) {
@@ -517,6 +530,13 @@ export default class ChatRoom extends Listenable {
                     member.status,
                     member.identity);
 
+                if (member.liveStreamViewURL) {
+                    this.eventEmitter.emit(
+                        XMPPEvents.LIVE_STREAM_URL_CHANGE,
+                        from,
+                        member.liveStreamViewURL);
+                }
+
                 // we are reporting the status with the join
                 // so we do not want a second event about status update
                 hasStatusUpdate = false;
@@ -556,6 +576,15 @@ export default class ChatRoom extends Listenable {
                 hasStatusUpdate = true;
                 memberOfThis.status = member.status;
             }
+
+            if (memberOfThis.liveStreamViewURL !== member.liveStreamViewURL) {
+                memberOfThis.liveStreamViewURL = member.liveStreamViewURL;
+                this.eventEmitter.emit(
+                    XMPPEvents.LIVE_STREAM_URL_CHANGE,
+                    from,
+                    member.liveStreamViewURL);
+            }
+
         }
 
         // after we had fired member or room joined events, lets fire events
@@ -754,7 +783,6 @@ export default class ChatRoom extends Listenable {
      * whether this is the focus that left
      */
     onParticipantLeft(jid, skipEvents) {
-
         delete this.lastPresences[jid];
 
         if (skipEvents) {
@@ -812,6 +840,13 @@ export default class ChatRoom extends Listenable {
         const membersKeys = Object.keys(this.members);
 
         if (!isSelfPresence) {
+            if (this.members[from].liveStreamViewURL) {
+                this.eventEmitter.emit(
+                    XMPPEvents.LIVE_STREAM_URL_CHANGE,
+                    from,
+                    undefined);
+            }
+
             delete this.members[from];
             this.onParticipantLeft(from, false);
         } else if (membersKeys.length > 0) {
@@ -895,11 +930,11 @@ export default class ChatRoom extends Listenable {
             this.discoRoomInfo();
         }
 
-        const json = tryParseJSONAndVerify(txt);
+        const jsonPayload = tryParseJSONAndVerify(txt);
 
-        if (json) {
+        if (jsonPayload) {
             this.eventEmitter.emit(XMPPEvents.JSON_MESSAGE_RECEIVED,
-                from, json);
+                from, jsonPayload);
 
             return;
         }
