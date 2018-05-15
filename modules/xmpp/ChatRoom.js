@@ -935,7 +935,7 @@ export default class ChatRoom extends Listenable {
                         + '>not-allowed['
                         + 'xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"]')
                 .length) {
-            const content = $(pres).find('>error>not-allowed').text();
+            const content = $(pres).find('>error>text').text().trim();
             const toDomain = Strophe.getDomainFromJid(pres.getAttribute('to'));
 
             if (toDomain === this.xmpp.options.hosts.anonymousdomain) {
@@ -953,7 +953,7 @@ export default class ChatRoom extends Listenable {
         } else if ($(pres).find('>error>service-unavailable').length) {
             logger.warn('Maximum users limit for the room has been reached',
                 pres);
-            const content = $(pres).find('>error>service-unavailable').text();
+            const content = $(pres).find('>error>text').text().trim();
 
             this.eventEmitter.emit(XMPPEvents.ROOM_MAX_USERS_ERROR, content);
         } else {
