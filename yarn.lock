@@ -55,6 +55,18 @@
     lodash "^4.2.0"
     to-fast-properties "^2.0.0"
 
+"@jitsi/sdp-interop@0.1.13":
+  version "0.1.13"
+  resolved "http://registry.npm.taobao.org/@jitsi/sdp-interop/download/@jitsi/sdp-interop-0.1.13.tgz#1ab2bf34843fa4b59fca54a886cc3a2d8eaf2d46"
+  dependencies:
+    sdp-transform "2.3.0"
+
+"@jitsi/sdp-simulcast@0.2.1":
+  version "0.2.1"
+  resolved "http://registry.npm.taobao.org/@jitsi/sdp-simulcast/download/@jitsi/sdp-simulcast-0.2.1.tgz#91c9baf98d69ff6e9f772b9e10ed1ff632342caa"
+  dependencies:
+    sdp-transform "2.3.0"
+
 abbrev@1:
   version "1.1.0"
   resolved "https://registry.npmjs.org/abbrev/-/abbrev-1.1.0.tgz#d0554c2256636e2f56e7c2e5ad183f859428d81f"
@@ -964,10 +976,6 @@ block-stream@*:
 bluebird@^2.9.27:
   version "2.11.0"
   resolved "https://registry.npmjs.org/bluebird/-/bluebird-2.11.0.tgz#534b9033c022c9579c56ba3b3e5a5caafbb650e1"
-
-bluebird@^3.5.0:
-  version "3.5.0"
-  resolved "https://registry.npmjs.org/bluebird/-/bluebird-3.5.0.tgz#791420d7f551eea2897453a8a77653f96606d67c"
 
 bluebird@^3.5.1:
   version "3.5.1"
@@ -2080,9 +2088,9 @@ flat-cache@^1.2.1:
     graceful-fs "^4.1.2"
     write "^0.2.1"
 
-flow-bin@0.57.3:
-  version "0.57.3"
-  resolved "http://registry.npm.taobao.org/flow-bin/download/flow-bin-0.57.3.tgz#843fb80a821b6d0c5847f7bb3f42365ffe53b27b"
+flow-bin@0.67.1:
+  version "0.67.1"
+  resolved "http://registry.npm.taobao.org/flow-bin/download/flow-bin-0.67.1.tgz#eabb7197cce870ac9442cfd04251c7ddc30377db"
 
 flush-write-stream@^1.0.0:
   version "1.0.2"
@@ -3361,12 +3369,6 @@ pluralize@^7.0.0:
   version "7.0.0"
   resolved "http://registry.npm.taobao.org/pluralize/download/pluralize-7.0.0.tgz#298b89df8b93b0221dbf421ad2b1b1ea23fc6777"
 
-precalltest@^1.0.0:
-  version "1.1.0"
-  resolved "https://registry.npmjs.org/precalltest/-/precalltest-1.1.0.tgz#a405f01686766a65d1103d6334433875e1223733"
-  dependencies:
-    bluebird "^3.5.0"
-
 precommit-hook@3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/precommit-hook/-/precommit-hook-3.0.0.tgz#6136c45185ff964371673f6b63e9e485549db1d7"
@@ -3504,13 +3506,12 @@ rc@^1.1.7:
     minimist "^1.2.0"
     strip-json-comments "~2.0.1"
 
-react-native-callstats@3.27.0:
-  version "3.27.0"
-  resolved "http://registry.npm.taobao.org/react-native-callstats/download/react-native-callstats-3.27.0.tgz#c4fc8bd304e409029d9c7cdb723fe540ddc18ee9"
+react-native-callstats@3.50.4:
+  version "3.50.4"
+  resolved "http://registry.npm.taobao.org/react-native-callstats/download/react-native-callstats-3.50.4.tgz#441059e9126a6de4970c11a6bd18e576cc4db1e6"
   dependencies:
     base-64 "0.1.0"
     jssha "^2.2.0"
-    precalltest "^1.0.0"
 
 read-pkg-up@^2.0.0:
   version "2.0.0"
@@ -3755,18 +3756,6 @@ schema-utils@^0.4.2:
   dependencies:
     ajv "^6.1.0"
     ajv-keywords "^3.1.0"
-
-sdp-interop@0.1.12:
-  version "0.1.12"
-  resolved "https://registry.npmjs.org/sdp-interop/-/sdp-interop-0.1.12.tgz#f6b88e3b26036dfea15b225e956a9ea492c3d735"
-  dependencies:
-    sdp-transform "2.3.0"
-
-sdp-simulcast@0.2.1:
-  version "0.2.1"
-  resolved "https://registry.npmjs.org/sdp-simulcast/-/sdp-simulcast-0.2.1.tgz#f42e4c739790d67e60853cddd764a42c594e1fc8"
-  dependencies:
-    sdp-transform "2.3.0"
 
 sdp-transform@2.3.0:
   version "2.3.0"
@@ -4046,9 +4035,9 @@ strip-json-comments@~2.0.1:
   version "2.0.1"
   resolved "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-2.0.1.tgz#3c531942e908c2697c0ec344858c286c7ca0a60a"
 
-"strophe.js@github:jitsi/strophejs#1.2.14-1":
-  version "1.2.14-1"
-  resolved "https://codeload.github.com/jitsi/strophejs/tar.gz/d05254fb28f4bbe6df5f905358582db3a12ee04c"
+strophe.js@1.2.15:
+  version "1.2.15"
+  resolved "http://registry.npm.taobao.org/strophe.js/download/strophe.js-1.2.15.tgz#959878f03a43881eddb8443a8ea77aa3816e9c24"
 
 strophejs-plugin-disco@0.0.2:
   version "0.0.2"

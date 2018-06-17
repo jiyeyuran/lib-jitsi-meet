@@ -21,15 +21,12 @@ class ScreenObtainer {
      * (this.obtainStream).
      *
      * @param {object} options
-     * @param {boolean} [options.disableDesktopSharing]
      * @param {boolean} [options.desktopSharingChromeDisabled]
      * @param {boolean} [options.desktopSharingChromeExtId]
      * @param {boolean} [options.desktopSharingFirefoxDisabled]
-     * @param {boolean} [options.desktopSharingFirefoxExtId] (deprecated)
      * @param {Function} gum GUM method
      */
     init(options = {
-        disableDesktopSharing: false,
         desktopSharingChromeDisabled: false,
         desktopSharingChromeExtId: null,
         desktopSharingFirefoxDisabled: false,
@@ -40,14 +37,10 @@ class ScreenObtainer {
         this.gumFunction = gum;
         this.extId = options.desktopSharingChromeExtId;
 
-        this.obtainStream
-            = this.options.disableDesktopSharing
-                ? null : this._createObtainStreamMethod();
+        this.obtainStream = this._createObtainStreamMethod();
 
         if (!this.obtainStream) {
             logger.info('Desktop sharing disabled');
-
-            return;
         }
     }
 
