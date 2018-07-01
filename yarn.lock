@@ -3506,9 +3506,9 @@ rc@^1.1.7:
     minimist "^1.2.0"
     strip-json-comments "~2.0.1"
 
-react-native-callstats@3.50.4:
-  version "3.50.4"
-  resolved "http://registry.npm.taobao.org/react-native-callstats/download/react-native-callstats-3.50.4.tgz#441059e9126a6de4970c11a6bd18e576cc4db1e6"
+react-native-callstats@3.52.0:
+  version "3.52.0"
+  resolved "http://registry.npm.taobao.org/react-native-callstats/download/react-native-callstats-3.52.0.tgz#0bd53ae1b298dc4253dd6d61df9944efb19615c5"
   dependencies:
     base-64 "0.1.0"
     jssha "^2.2.0"

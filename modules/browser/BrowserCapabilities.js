@@ -33,6 +33,7 @@ export default class BrowserCapabilities extends BrowserDetection {
         return !(
             this.isFirefox()
             || this.isEdge()
+            || this.isReactNative()
             || this.isSafariWithWebrtc()
         );
     }
@@ -55,22 +56,6 @@ export default class BrowserCapabilities extends BrowserDetection {
     isSafariWithWebrtc() {
         return this.isSafari()
             && !this.isVersionLessThan('11');
-    }
-
-    /**
-     * Checks if Temasys RTC plugin is used.
-     * @returns {boolean}
-     */
-    isTemasysPluginUsed() {
-        // Temasys do not support Microsoft Edge:
-        // http://support.temasys.com.sg/support/solutions/articles/
-        // 5000654345-can-the-temasys-webrtc-plugin-be-used-with-microsoft-edge-
-        return (
-            (this.isSafari()
-                && !this.isSafariWithWebrtc())
-            || (this.isIExplorer()
-                && this.isVersionLessThan('12'))
-        );
     }
 
     /**
@@ -113,8 +98,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @return {boolean}
      */
     supportsMediaStreamConstructor() {
-        return !this.isReactNative()
-            && !this.isTemasysPluginUsed();
+        return !this.isReactNative();
     }
 
     /**

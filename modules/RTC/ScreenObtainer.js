@@ -1,4 +1,4 @@
-/* global $, AdapterJS */
+/* global $ */
 
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
@@ -123,20 +123,6 @@ class ScreenObtainer {
 
             return this._onGetStreamResponse.bind(
                 this, { streamType: 'window' });
-        }
-        if (browser.isTemasysPluginUsed()) {
-            if (AdapterJS
-                    && AdapterJS.WebRTCPlugin.plugin.isScreensharingAvailable) {
-                const sourceId = AdapterJS.WebRTCPlugin.plugin.screensharingKey;
-
-                return this._onGetStreamResponse.bind(
-                    this,
-                    {
-                        streamId: sourceId,
-                        streamType: 'screen'
-                    }
-                );
-            }
         }
         logger.log(
             'Screen sharing not supported by the current browser: ',

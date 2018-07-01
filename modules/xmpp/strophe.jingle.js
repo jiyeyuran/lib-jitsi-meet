@@ -303,8 +303,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         // uses time-limited credentials as described in
         // http://tools.ietf.org/html/draft-uberti-behave-turn-rest-00
         //
-        // See https://code.google.com/p/prosody-modules/source/browse/
-        // mod_turncredentials/mod_turncredentials.lua
+        // See https://modules.prosody.im/mod_turncredentials.html
         // for a prosody module which implements this.
         //
         // Currently, this doesn't work with updateIce and therefore credentials
@@ -315,8 +314,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.connection.sendIQ(
             $iq({ type: 'get',
                 to: this.connection.domain })
-                .c('services', { xmlns: 'urn:xmpp:extdisco:1' })
-                .c('service', { host: `turn.${this.connection.domain}` }),
+                .c('services', { xmlns: 'urn:xmpp:extdisco:1' }),
             res => {
                 const iceservers = [];
 

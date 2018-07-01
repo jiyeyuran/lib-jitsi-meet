@@ -1882,6 +1882,41 @@ function obtainDevices(options) {
 }
 
 /**
+<<<<<<< HEAD
+ * In case of IE we continue from 'onReady' callback passed to RTCUtils
+ * constructor. It will be invoked by Temasys plugin once it is initialized.
+ *
+ * @param options
+ * @param GUM
+ */
+function onReady(options, GUM) {
+    rtcReady = true;
+    eventEmitter.emit(RTCEvents.RTC_READY, true);
+    screenObtainer.init(options, GUM);
+
+    if (rtcUtils.isDeviceListAvailable() && rawEnumerateDevicesWithCallback) {
+        rawEnumerateDevicesWithCallback(ds => {
+            currentlyAvailableMediaDevices = ds.splice(0);
+
+            logger.info('Available devices: ', currentlyAvailableMediaDevices);
+            sendDeviceListToAnalytics(currentlyAvailableMediaDevices);
+
+            eventEmitter.emit(RTCEvents.DEVICE_LIST_AVAILABLE,
+                currentlyAvailableMediaDevices);
+
+            if (isDeviceChangeEventSupported) {
+                navigator.mediaDevices.ondevicechange = () =>
+                    rtcUtils.enumerateDevices(onMediaDevicesListChanged);
+            } else {
+                pollForAvailableMediaDevices();
+            }
+        });
+    }
+}
+
+/**
+=======
+>>>>>>> jitsi
  * Wraps original attachMediaStream function to set current audio output device
  * if this is supported.
  * @param {Function} origAttachMediaStream
