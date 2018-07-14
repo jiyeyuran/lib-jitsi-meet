@@ -8,6 +8,7 @@
           webkitRTCPeerConnection,
           webkitURL
 */
+
 import { AVAILABLE_DEVICE } from '../../service/statistics/AnalyticsEvents';
 import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import EventEmitter from 'events';
@@ -130,8 +131,7 @@ function initRawEnumerateDevicesWithCallback() {
             : function(callback) {
                 MediaStreamTrack.getSources(
                     sources =>
-                        callback(
-                            sources.map(convertMediaStreamTrackSource)));
+                        callback(sources.map(convertMediaStreamTrackSource)));
             };
 }
 
@@ -146,8 +146,6 @@ function initRawEnumerateDevicesWithCallback() {
 // TODO: check MS Edge
 const isDeviceChangeEventSupported
     = navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices;
-
-let rtcReady = false;
 
 /**
  *
@@ -864,7 +862,7 @@ class RTCUtils extends Listenable {
 
     /**
      * Depending on the browser, sets difference instance methods for
-     * interacting with user media and adds methods to native webrtc related
+     * interacting with user media and adds methods to native WebRTC-related
      * objects. Also creates an instance variable for peer connection
      * constraints.
      *
@@ -896,169 +894,154 @@ class RTCUtils extends Listenable {
         // Initialize rawEnumerateDevicesWithCallback
         initRawEnumerateDevicesWithCallback();
 
-        return new Promise((resolve, reject) => {
-            if (browser.usesNewGumFlow()) {
-                this.RTCPeerConnectionType = window.RTCPeerConnection;
+        if (browser.usesNewGumFlow()) {
+            this.RTCPeerConnectionType = window.RTCPeerConnection;
 
-                this.getUserMedia
-                    = (constraints, successCallback, errorCallback) =>
-                        window.navigator.mediaDevices
-                            .getUserMedia(constraints)
-                            .then(stream => {
-                                successCallback && successCallback(stream);
+            this.getUserMedia
+                = (constraints, successCallback, errorCallback) =>
+                    window.navigator.mediaDevices.getUserMedia(constraints)
+                        .then(stream => {
+                            successCallback && successCallback(stream);
 
-                                return stream;
-                            })
-                            .catch(err => {
-                                errorCallback && errorCallback(err);
-
-                                return Promise.reject(err);
-                            });
-
-                this.enumerateDevices = callback =>
-                    window.navigator.mediaDevices.enumerateDevices()
-                        .then(foundDevices => {
-                            callback(foundDevices);
-
-                            return foundDevices;
+                            return stream;
                         })
                         .catch(err => {
-                            logger.error(`Error enumerating devices: ${err}`);
+                            errorCallback && errorCallback(err);
 
-                            callback([]);
-
-                            return [];
+                            return Promise.reject(err);
                         });
 
-                this.attachMediaStream
-                    = wrapAttachMediaStream((element, stream) => {
-                        if (element) {
-                            element.srcObject = stream;
-                        }
+            this.enumerateDevices = callback =>
+                window.navigator.mediaDevices.enumerateDevices()
+                    .then(foundDevices => {
+                        callback(foundDevices);
+
+                        return foundDevices;
+                    })
+                    .catch(err => {
+                        logger.error(`Error enumerating devices: ${err}`);
+
+                        callback([]);
+
+                        return [];
                     });
 
-                this.getStreamID = stream => stream.id;
-                this.getTrackID = track => track.id;
-            } else if (browser.isChrome() // this is chrome < 61
-                    || browser.isOpera()
-                    || browser.isNWJS()
-                    || browser.isElectron()
-                    || browser.isReactNative()) {
-
-                this.RTCPeerConnectionType = webkitRTCPeerConnection;
-                const getUserMedia
-                    = navigator.webkitGetUserMedia.bind(navigator);
-
-                this.getUserMedia = wrapGetUserMedia(getUserMedia);
-                this.enumerateDevices = rawEnumerateDevicesWithCallback;
-
-                this.attachMediaStream
-                    = wrapAttachMediaStream((element, stream) => {
-                        defaultSetVideoSrc(element, stream);
-
-                        return element;
-                    });
-                this.getStreamID = function(stream) {
-                    // A. MediaStreams from FF endpoints have the characters '{'
-                    // and '}' that make jQuery choke.
-                    // B. The react-native-webrtc implementation that we use on
-                    // React Native at the time of this writing returns a number
-                    // for the id of MediaStream. Let's just say that a number
-                    // contains no special characters.
-                    const id = stream.id;
-
-                    // XXX The return statement is affected by automatic
-                    // semicolon insertion (ASI). No line terminator is allowed
-                    // between the return keyword and the expression.
-                    return (
-                        typeof id === 'number'
-                            ? id
-                            : SDPUtil.filterSpecialChars(id));
-                };
-                this.getTrackID = function(track) {
-                    return track.id;
-                };
-
-                if (!webkitMediaStream.prototype.getVideoTracks) {
-                    webkitMediaStream.prototype.getVideoTracks = function() {
-                        return this.videoTracks;
-                    };
-                }
-                if (!webkitMediaStream.prototype.getAudioTracks) {
-                    webkitMediaStream.prototype.getAudioTracks = function() {
-                        return this.audioTracks;
-                    };
-                }
-            } else if (browser.isEdge()) {
-                this.RTCPeerConnectionType = ortcRTCPeerConnection;
-                this.getUserMedia
-                    = wrapGetUserMedia(
-                        navigator.mediaDevices.getUserMedia.bind(
-                            navigator.mediaDevices),
-                        true);
-                this.enumerateDevices = rawEnumerateDevicesWithCallback;
-                this.attachMediaStream
-                    = wrapAttachMediaStream((element, stream) => {
-                        defaultSetVideoSrc(element, stream);
-                    });
-
-                // ORTC does not generate remote MediaStreams so those are
-                // manually created by the ORTC shim. This means that their
-                // id (internally generated) does not match the stream id
-                // signaled into the remote SDP. Therefore, the shim adds a
-                // custom jitsiRemoteId property with the original stream id.
-                this.getStreamID = function(stream) {
-                    const id = stream.jitsiRemoteId || stream.id;
-
-                    return SDPUtil.filterSpecialChars(id);
-                };
-
-                // Remote MediaStreamTracks generated by ORTC (within a
-                // RTCRtpReceiver) have an internally/random id which does not
-                // match the track id signaled in the remote SDP. The shim adds
-                // a custom jitsi-id property with the original track id.
-                this.getTrackID = function(track) {
-                    return track.jitsiRemoteId || track.id;
-                };
-            } else {
-                rejectWithWebRTCNotSupported(
-                    'Browser does not appear to be WebRTC-capable',
-                    reject);
-
-                return;
-            }
-
-            this._initPCConstraints(options);
-
-            rtcReady = true;
-            eventEmitter.emit(RTCEvents.RTC_READY, true);
-            screenObtainer.init(
-                options, this.getUserMediaWithConstraints.bind(this));
-
-            if (this.isDeviceListAvailable()
-                    && rawEnumerateDevicesWithCallback) {
-                rawEnumerateDevicesWithCallback(ds => {
-                    availableDevices = ds.splice(0);
-
-                    logger.debug('Available devices: ', availableDevices);
-                    sendDeviceListToAnalytics(availableDevices);
-
-                    eventEmitter.emit(RTCEvents.DEVICE_LIST_AVAILABLE,
-                        availableDevices);
-
-                    if (isDeviceChangeEventSupported) {
-                        navigator.mediaDevices.addEventListener(
-                            'devicechange',
-                            () => this.enumerateDevices(
-                                    onMediaDevicesListChanged));
-                    } else {
-                        pollForAvailableMediaDevices();
+            this.attachMediaStream
+                = wrapAttachMediaStream((element, stream) => {
+                    if (element) {
+                        element.srcObject = stream;
                     }
                 });
-            }
 
-            resolve();
-        });
+            this.getStreamID = ({ id }) => id;
+            this.getTrackID = ({ id }) => id;
+        } else if (browser.isChrome() // this is chrome < 61
+                || browser.isOpera()
+                || browser.isNWJS()
+                || browser.isElectron()
+                || browser.isReactNative()) {
+
+            this.RTCPeerConnectionType = webkitRTCPeerConnection;
+
+            const getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
+
+            this.getUserMedia = wrapGetUserMedia(getUserMedia);
+
+            this.enumerateDevices = rawEnumerateDevicesWithCallback;
+
+            this.attachMediaStream
+                = wrapAttachMediaStream((element, stream) => {
+                    defaultSetVideoSrc(element, stream);
+
+                    return element;
+                });
+
+            this.getStreamID = function({ id }) {
+                // A. MediaStreams from FF endpoints have the characters '{' and
+                // '}' that make jQuery choke.
+                // B. The react-native-webrtc implementation that we use at the
+                // time of this writing returns a number for the id of
+                // MediaStream. Let's just say that a number contains no special
+                // characters.
+                return (
+                    typeof id === 'number'
+                        ? id
+                        : SDPUtil.filterSpecialChars(id));
+            };
+            this.getTrackID = ({ id }) => id;
+
+            if (!webkitMediaStream.prototype.getVideoTracks) {
+                webkitMediaStream.prototype.getVideoTracks = function() {
+                    return this.videoTracks;
+                };
+            }
+            if (!webkitMediaStream.prototype.getAudioTracks) {
+                webkitMediaStream.prototype.getAudioTracks = function() {
+                    return this.audioTracks;
+                };
+            }
+        } else if (browser.isEdge()) {
+            this.RTCPeerConnectionType = ortcRTCPeerConnection;
+            this.getUserMedia
+                = wrapGetUserMedia(
+                    navigator.mediaDevices.getUserMedia.bind(
+                        navigator.mediaDevices),
+                    true);
+            this.enumerateDevices = rawEnumerateDevicesWithCallback;
+            this.attachMediaStream
+                = wrapAttachMediaStream((element, stream) => {
+                    defaultSetVideoSrc(element, stream);
+                });
+
+            // ORTC does not generate remote MediaStreams so those are
+            // manually created by the ORTC shim. This means that their
+            // id (internally generated) does not match the stream id
+            // signaled into the remote SDP. Therefore, the shim adds a
+            // custom jitsiRemoteId property with the original stream id.
+            this.getStreamID = function(stream) {
+                const id = stream.jitsiRemoteId || stream.id;
+
+                return SDPUtil.filterSpecialChars(id);
+            };
+
+            // Remote MediaStreamTracks generated by ORTC (within a
+            // RTCRtpReceiver) have an internally/random id which does not match
+            // the track id signaled in the remote SDP. The shim adds a custom
+            // jitsi-id property with the original track id.
+            this.getTrackID = track => track.jitsiRemoteId || track.id;
+        } else {
+            const message = 'Endpoint does not appear to be WebRTC-capable';
+
+            logger.error(message);
+            throw new Error(message);
+        }
+
+        this._initPCConstraints(options);
+
+        screenObtainer.init(
+            options,
+            this.getUserMediaWithConstraints.bind(this));
+
+        if (this.isDeviceListAvailable() && rawEnumerateDevicesWithCallback) {
+            rawEnumerateDevicesWithCallback(ds => {
+                availableDevices = ds.splice(0);
+
+                logger.debug('Available devices: ', availableDevices);
+                sendDeviceListToAnalytics(availableDevices);
+
+                eventEmitter.emit(
+                    RTCEvents.DEVICE_LIST_AVAILABLE,
+                    availableDevices);
+
+                if (isDeviceChangeEventSupported) {
+                    navigator.mediaDevices.addEventListener(
+                        'devicechange',
+                        () => this.enumerateDevices(onMediaDevicesListChanged));
+                } else {
+                    pollForAvailableMediaDevices();
+                }
+            });
+        }
     }
 
     /**
@@ -1621,63 +1604,17 @@ class RTCUtils extends Listenable {
     }
 
     /**
+     * Checks whether it is possible to enumerate available cameras/microphones.
      *
+     * @returns {boolean} {@code true} if the device listing is available;
+     * {@code false}, otherwise.
      */
-    isRTCReady() {
-        return rtcReady;
-    }
-
-    /**
-     *
-     */
-    _isDeviceListAvailable() {
-        if (!rtcReady) {
-            throw new Error('WebRTC not ready yet');
-        }
-
+    isDeviceListAvailable() {
         return Boolean(
             (navigator.mediaDevices
                 && navigator.mediaDevices.enumerateDevices)
             || (typeof MediaStreamTrack !== 'undefined'
                 && MediaStreamTrack.getSources));
-    }
-
-    /**
-     * Returns a promise which can be used to make sure that the WebRTC stack
-     * has been initialized.
-     *
-     * @returns {Promise} which is resolved only if the WebRTC stack is ready.
-     * Note that currently we do not detect stack initialization failure and
-     * the promise is never rejected(unless unexpected error occurs).
-     */
-    onRTCReady() {
-        if (rtcReady) {
-            return Promise.resolve();
-        }
-
-        return new Promise(resolve => {
-            const listener = () => {
-                eventEmitter.removeListener(RTCEvents.RTC_READY, listener);
-                resolve();
-            };
-
-            eventEmitter.addListener(RTCEvents.RTC_READY, listener);
-
-            // We have no failed event, so... it either resolves or nothing
-            // happens.
-        });
-
-    }
-
-    /**
-     * Checks if its possible to enumerate available cameras/microphones.
-     *
-     * @returns {Promise<boolean>} a Promise which will be resolved only once
-     * the WebRTC stack is ready, either with true if the device listing is
-     * available available or with false otherwise.
-     */
-    isDeviceListAvailable() {
-        return this.onRTCReady().then(this._isDeviceListAvailable.bind(this));
     }
 
     /**
@@ -1824,32 +1761,6 @@ class RTCUtils extends Listenable {
             constraints.optional.push({ googSuspendBelowMinBitrate: 'true' });
         }
     }
-}
-
-/**
- * Rejects a Promise because WebRTC is not supported.
- *
- * @param {string} errorMessage - The human-readable message of the Error which
- * is the reason for the rejection.
- * @param {Function} reject - The reject function of the Promise.
- * @returns {void}
- */
-function rejectWithWebRTCNotSupported(errorMessage, reject) {
-    const error = new Error(errorMessage);
-
-    // WebRTC is not supported.
-    //
-    // XXX The Error class already has a property name which is commonly used to
-    // detail the represented error in a non-human-readable way (in contrast to
-    // the human-readable property message). I explicitly did not want to
-    // introduce a new specific property.
-    // FIXME None of the existing JitsiXXXErrors seemed to be appropriate
-    // recipients of the constant WEBRTC_NOT_SUPPORTED so I explicitly chose to
-    // leave it as a magic string at the time of this writing.
-    error.name = 'WEBRTC_NOT_SUPPORTED';
-
-    logger.error(errorMessage);
-    reject(error);
 }
 
 const rtcUtils = new RTCUtils();
