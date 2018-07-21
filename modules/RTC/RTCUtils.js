@@ -61,8 +61,8 @@ const DEFAULT_CONSTRAINTS = {
     video: {
         aspectRatio: 16 / 9,
         height: {
-            ideal: 640,
-            max: 640,
+            ideal: 720,
+            max: 720,
             min: 240
         }
     }
