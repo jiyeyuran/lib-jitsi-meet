@@ -580,12 +580,13 @@ JitsiConference.prototype.removeCommandListener = function(command) {
  * Sends text message to the other participants in the conference
  * @param message the text message.
  * @param elementName the element name to encapsulate the message.
+ * @param nickname the name of the sender.
  * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.sendTextMessage = function(
-        message, elementName = 'body') {
+        message, elementName, nickname) {
     if (this.room) {
-        this.room.sendMessage(message, elementName);
+        this.room.sendMessage(message, elementName || 'body', nickname);
     }
 };
 
