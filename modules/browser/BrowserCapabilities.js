@@ -105,6 +105,14 @@ export default class BrowserCapabilities extends BrowserDetection {
         return !this.isEdge();
     }
 
+    /**
+     * Checks if the current browser support the device change event.
+     * @return {boolean}
+     */
+    supportsDeviceChangeEvent() {
+        return navigator.mediaDevices
+            && typeof navigator.mediaDevices.ondevicechange !== 'undefined';
+    }
 
     /**
      * Checks if the current browser supports the MediaStream constructor as
@@ -228,5 +236,15 @@ export default class BrowserCapabilities extends BrowserDetection {
             || this.isFirefox()
             || this.isSafariWithWebrtc();
 
+    }
+
+    /**
+     * Checks if the browser uses webrtc-adapter. All browsers using the new
+     * getUserMedia flow and Edge.
+     *
+     * @returns {boolean}
+     */
+    usesAdapter() {
+        return this.usesNewGumFlow() || this.isEdge();
     }
 }

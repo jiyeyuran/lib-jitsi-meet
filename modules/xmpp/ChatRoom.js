@@ -11,6 +11,7 @@ import * as MediaType from '../../service/RTC/MediaType';
 import XMPPEvents from '../../service/xmpp/XMPPEvents';
 
 import Moderator from './moderator';
+import Statistics from '../statistics/statistics';
 
 const logger = getLogger(__filename);
 
@@ -569,7 +570,8 @@ export default class ChatRoom extends Listenable {
                 // seems there is some period of time in prosody that the
                 // configuration form is received but not applied. And if any
                 // participant joins during that period of time the first
-                // presence from the focus won't conain <item jid="focus..." />.
+                // presence from the focus won't contain
+                // <item jid="focus..." />.
                 memberOfThis.isFocus = true;
                 this._initFocus(from, jid);
             }
@@ -611,6 +613,36 @@ export default class ChatRoom extends Listenable {
                 if (member.isFocus && !this.noBridgeAvailable) {
                     this.noBridgeAvailable = true;
                     this.eventEmitter.emit(XMPPEvents.BRIDGE_DOWN);
+                }
+                break;
+            case 'conference-properties':
+                if (member.isFocus) {
+                    for (let j = 0; j < node.children.length; j++) {
+                        const { attributes } = node.children[j];
+
+                        if (!attributes) {
+                            break;
+                        }
+
+                        const { key, value } = attributes;
+
+                        /* eslint-disable no-fallthrough */
+                        switch (key) {
+
+                        // The number of jitsi-videobridge instances currently
+                        // used for the conference.
+                        case 'bridge-count':
+
+                        // The conference creation time (set by jicofo).
+                        case 'created-ms':
+                        case 'octo-enabled':
+                            Statistics.analytics.addPermanentProperties({
+                                [key.replace('-', '_')]: value
+                            });
+                            break;
+                        }
+                        /* eslint-enable no-fallthrough */
+                    }
                 }
                 break;
             case 'transcription-status': {

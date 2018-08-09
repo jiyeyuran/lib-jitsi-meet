@@ -15,6 +15,7 @@ import {
 import AvgRTPStatsReporter from './modules/statistics/AvgRTPStatsReporter';
 import ComponentsVersions from './modules/version/ComponentsVersions';
 import ConnectionQuality from './modules/connectivity/ConnectionQuality';
+import E2ePing from './modules/e2eping/e2eping';
 import { getLogger } from 'jitsi-meet-logger';
 import GlobalOnErrorHandler from './modules/util/GlobalOnErrorHandler';
 import EventEmitter from 'events';
@@ -244,6 +245,33 @@ JitsiConference.prototype._init = function(options = {}) {
 
     this.room.updateDeviceAvailability(RTC.getDeviceAvailability());
 
+    this.e2eping = new E2ePing(
+        this.eventEmitter,
+        config,
+        (message, to) => {
+            try {
+                this.sendMessage(
+                    message, to, true /* sendThroughVideobridge */);
+            } catch (error) {
+                logger.warn('Failed to send a ping request or response.');
+            }
+        });
+    this.on(
+        JitsiConferenceEvents.USER_JOINED,
+        (id, participant) => this.e2eping.participantJoined(participant));
+    this.on(
+        JitsiConferenceEvents.USER_LEFT,
+        (id, participant) => this.e2eping.participantLeft(participant));
+    this.on(
+        JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
+        (participant, payload) => {
+            this.e2eping.messageReceived(participant, payload);
+        });
+    this.on(
+        JitsiConferenceEvents.DATA_CHANNEL_OPENED,
+        this.e2eping.dataChannelOpened);
+
+
     if (!this.rtc) {
         this.rtc = new RTC(this, options);
         this.eventManager.setupRTCListeners();
@@ -311,6 +339,11 @@ JitsiConference.prototype._init = function(options = {}) {
 
     // creates dominant speaker detection that works only in p2p mode
     this.p2pDominantSpeakerDetection = new P2PDominantSpeakerDetection(this);
+
+    if (config && config.deploymentInfo && config.deploymentInfo.userRegion) {
+        this.setLocalParticipantProperty(
+            'region', config.deploymentInfo.userRegion);
+    }
 };
 
 /**
@@ -613,7 +646,10 @@ JitsiConference.prototype.sendCommand = function(name, values) {
     if (this.room) {
         this.room.addToPresence(name, values);
         this.room.sendPresence();
+    } else {
+        logger.warn('Not sending a command, room not initialized.');
     }
+
 };
 
 /**
@@ -1028,9 +1064,30 @@ JitsiConference.prototype.unlock = function() {
  * Or cache it if channel is not created and send it once channel is available.
  * @param participantId the identifier of the participant
  * @throws NetworkError or InvalidStateError or Error if the operation fails.
+ * @returns {void}
  */
 JitsiConference.prototype.selectParticipant = function(participantId) {
-    this.rtc.selectEndpoint(participantId);
+    this.selectParticipants([ participantId ]);
+};
+
+/*
+ * Elects participants with given ids to be the selected participants in order
+ * to receive higher video quality (if simulcast is enabled). The argument
+ * should be an array of participant id strings or an empty array; an error will
+ * be thrown if a non-array is passed in. The error is thrown as a layer of
+ * protection against passing an invalid argument, as the error will happen in
+ * the bridge and may not be visible in the client.
+ *
+ * @param {Array<strings>} participantIds - An array of identifiers for
+ * participants.
+ * @returns {void}
+ */
+JitsiConference.prototype.selectParticipants = function(participantIds) {
+    if (!Array.isArray(participantIds)) {
+        throw new Error('Invalid argument; participantIds must be an array.');
+    }
+
+    this.rtc.selectEndpoints(participantIds);
 };
 
 /**

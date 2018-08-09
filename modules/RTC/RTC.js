@@ -162,6 +162,15 @@ export default class RTC extends Listenable {
         this._lastNEndpoints = null;
 
         /**
+         * The number representing the maximum video height the local client
+         * should receive from the bridge.
+         *
+         * @type {number|undefined}
+         * @private
+         */
+        this._maxFrameHeight = undefined;
+
+        /**
          * The endpoint ID of currently pinned participant or <tt>null</tt> if
          * no user is pinned.
          * @type {string|null}
@@ -170,12 +179,12 @@ export default class RTC extends Listenable {
         this._pinnedEndpoint = null;
 
         /**
-         * The endpoint ID of currently selected participant or <tt>null</tt> if
-         * no user is selected.
-         * @type {string|null}
+         * The endpoint IDs of currently selected participants.
+         *
+         * @type {Array}
          * @private
          */
-        this._selectedEndpoint = null;
+        this._selectedEndpoints = [];
 
         // The last N change listener.
         this._lastNChangeListener = this._onLastNChanged.bind(this);
@@ -249,13 +258,19 @@ export default class RTC extends Listenable {
             try {
                 this._channel.sendPinnedEndpointMessage(
                     this._pinnedEndpoint);
-                this._channel.sendSelectedEndpointMessage(
-                    this._selectedEndpoint);
+                this._channel.sendSelectedEndpointsMessage(
+                    this._selectedEndpoints);
+
+                if (typeof this._maxFrameHeight !== 'undefined') {
+                    this._channel.sendReceiverVideoConstraintMessage(
+                        this._maxFrameHeight);
+                }
             } catch (error) {
                 GlobalOnErrorHandler.callErrorHandler(error);
                 logger.error(
                     `Cannot send selected(${this._selectedEndpoint})`
-                    + `pinned(${this._pinnedEndpoint}) endpoint message.`,
+                    + `pinned(${this._pinnedEndpoint})`
+                    + `frameHeight(${this._maxFrameHeight}) endpoint message`,
                     error);
             }
 
@@ -327,33 +342,37 @@ export default class RTC extends Listenable {
 
     /**
      * Sets the maximum video size the local participant should receive from
-     * remote participants. Will no-op if no data channel has been established.
+     * remote participants. Will cache the value and send it through the channel
+     * once it is created.
      *
      * @param {number} maxFrameHeightPixels the maximum frame height, in pixels,
      * this receiver is willing to receive.
      * @returns {void}
      */
     setReceiverVideoConstraint(maxFrameHeight) {
-        if (this._channel) {
+        this._maxFrameHeight = maxFrameHeight;
+
+        if (this._channel && this._channelOpen) {
             this._channel.sendReceiverVideoConstraintMessage(maxFrameHeight);
         }
     }
 
     /**
-     * Elects the participant with the given id to be the selected participant
-     * in order to always receive video for this participant (even when last n
-     * is enabled).
-     * If there is no channel we store it and send it through the channel once
-     * it is created.
-     * @param {string} id The user id.
+     * Elects the participants with the given ids to be the selected
+     * participants in order to always receive video for this participant (even
+     * when last n is enabled). If there is no channel we store it and send it
+     * through the channel once it is created.
+     *
+     * @param {Array<string>} ids - The user ids.
      * @throws NetworkError or InvalidStateError or Error if the operation
      * fails.
+     * @returns {void}
      */
-    selectEndpoint(id) {
-        // Cache the value if channel is missing, till we open it.
-        this._selectedEndpoint = id;
+    selectEndpoints(ids) {
+        this._selectedEndpoints = ids;
+
         if (this._channel && this._channelOpen) {
-            this._channel.sendSelectedEndpointMessage(id);
+            this._channel.sendSelectedEndpointsMessage(ids);
         }
     }
 
