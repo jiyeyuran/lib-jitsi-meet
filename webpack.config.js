@@ -1,6 +1,5 @@
 /* global __dirname */
 
-const path = require('path');
 const process = require('process');
 const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const webpack = require('webpack');
