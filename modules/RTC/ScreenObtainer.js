@@ -182,7 +182,15 @@ const ScreenObtainer = {
                 });
 
             return this.obtainScreenFromExtension;
- 
+        } else if (browser.isFirefox()) {
+            if (options.desktopSharingFirefoxDisabled) {
+                return null;
+            } else if (window.location.protocol === 'http:') {
+                logger.log('Screen sharing is not supported over HTTP. '
+                    + 'Use of HTTPS is required.');
+
+                return null;
+            }
 
             return this.obtainScreenOnFirefox;
         } else if (browser.isEdge() && navigator.getDisplayMedia) {
