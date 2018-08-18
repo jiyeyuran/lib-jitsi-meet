@@ -2470,6 +2470,9 @@ TraceablePeerConnection.prototype.generateNewStreamSSRCInfo = function(track) {
 };
 
 const handleLayerSuspension = function(peerConnection, isSelected) {
+    if (typeof peerConnection.getSenders !== 'function') {
+        return;
+    }
     const videoSender = peerConnection.getSenders()
         .find(sender => sender.track.kind === 'video');
 
