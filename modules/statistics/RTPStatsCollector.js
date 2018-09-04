@@ -1128,6 +1128,11 @@ StatsCollector.prototype.processNewStatsReport = function() {
         // https://w3c.github.io/webrtc-stats/#sentrtpstats-dict*
         } else if (now.type === 'inbound-rtp' || now.type === 'outbound-rtp') {
             const before = this.previousStatsReport.get(now.id);
+
+            // correct ssrc from id
+            if (browser.isSafariWithWebrtc()) {
+                now.ssrc = parseInt(now.id.split('_').pop(), 10)
+            }
             const ssrc = this.getNonNegativeValue(now.ssrc);
 
             if (!before || !ssrc) {

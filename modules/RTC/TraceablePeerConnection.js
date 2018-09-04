@@ -2481,8 +2481,13 @@ const handleLayerSuspension = function(peerConnection, isSelected) {
 
         return;
     }
-    if (!videoSender.getParameters) {
-        logger.debug('Browser doesn\'t support RTPSender parameters');
+    if (typeof videoSender.getParameters !== 'function') {
+        logger.warn('Browser doesn\'t support RTPSender parameters');
+
+        return;
+    }
+    if (typeof videoSender.setParameters !== 'function') {
+        logger.warn('Browser doesn\'t support RTPSender setting parameters');
 
         return;
     }

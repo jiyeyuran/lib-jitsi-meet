@@ -202,7 +202,8 @@ export default class BrowserCapabilities extends BrowserDetection {
 
         // Currently Safari using webrtc/adapter does not support video due in
         // part to Safari only supporting H264 and the bridge sending VP8.
-        return !this.isSafariWithWebrtc();
+        // return !this.isSafariWithWebrtc();
+        return true;
     }
 
     /**
