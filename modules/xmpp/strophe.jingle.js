@@ -41,21 +41,10 @@ class JingleConnectionPlugin extends ConnectionPlugin {
         this.sessions = {};
         this.jvbIceConfig = iceConfig.jvb;
         this.p2pIceConfig = iceConfig.p2p;
-        if (browser.isEdge()) {
-            this.mediaConstraints = {
-                'OfferToReceiveAudio': true,
-                'OfferToReceiveVideo': true
-            };
-        } else {
-            this.mediaConstraints = {
-                mandatory: {
-                    'OfferToReceiveAudio': true,
-                    'OfferToReceiveVideo': true
-                }
-
-                // MozDontOfferDataChannel: true when this is firefox
-            };
-        }
+        this.mediaConstraints = {
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+        };
     }
 
     /**

@@ -167,11 +167,13 @@ const ScreenObtainer = {
                 logger.info('Chrome extension not supported until ver 34');
 
                 return null;
+            } else if (browser.supportsGetDisplayMedia()
+                        && !options.desktopSharingChromeDisabled) {
+
+                return this.obtainScreenFromGetDisplayMedia;
             } else if (options.desktopSharingChromeDisabled
-                || options.desktopSharingChromeMethod === false
                 || !options.desktopSharingChromeExtId) {
 
-                // TODO: desktopSharingChromeMethod is deprecated, remove.
                 return null;
             }
 
@@ -193,15 +195,8 @@ const ScreenObtainer = {
             }
 
             return this.obtainScreenOnFirefox;
-        } else if (browser.isEdge() && navigator.getDisplayMedia) {
-            return (_, onSuccess, onFailure) => {
-                navigator.getDisplayMedia({ video: true })
-                    .then(stream => onSuccess({
-                        stream,
-                        sourceId: stream.id
-                    }))
-                    .catch(onFailure);
-            };
+        } else if (browser.isEdge() && browser.supportsGetDisplayMedia()) {
+            return this.obtainScreenFromGetDisplayMedia;
         }
 
         logger.log(
@@ -422,6 +417,37 @@ const ScreenObtainer = {
                 this.checkForChromeExtensionOnInterval(options,
                     streamCallback, failCallback);
             });
+    },
+
+    /**
+     * Obtains a screen capture stream using getDisplayMedia.
+     *
+     * @param callback - The success callback.
+     * @param errorCallback - The error callback.
+     */
+    obtainScreenFromGetDisplayMedia(options, callback, errorCallback) {
+        navigator.getDisplayMedia({ video: true })
+            .then(stream => {
+                let applyConstraintsPromise;
+
+                if (stream
+                    && stream.getTracks()
+                    && stream.getTracks().length > 0) {
+                    applyConstraintsPromise = stream.getTracks()[0]
+                        .applyConstraints(options.trackOptions);
+                } else {
+                    applyConstraintsPromise = Promise.resolve();
+                }
+
+                applyConstraintsPromise.then(() =>
+                    callback({
+                        stream,
+                        sourceId: stream.id
+                    }));
+            })
+            .catch(() =>
+                errorCallback(new JitsiTrackError(JitsiTrackErrors
+                    .CHROME_EXTENSION_USER_CANCELED)));
     }
 };
 
@@ -435,12 +461,8 @@ const ScreenObtainer = {
  * 'about:config'.
  */
 function obtainWebRTCScreen(options, streamCallback, failCallback) {
-    gumFunction(
-        [ 'screen' ],
-        stream => streamCallback({ stream }),
-        failCallback,
-        options
-    );
+    gumFunction([ 'screen' ], options)
+        .then(stream => streamCallback({ stream }), failCallback);
 }
 
 /**
@@ -682,18 +704,17 @@ function onGetStreamResponse(
     const { streamId, streamType, error } = options.response || {};
 
     if (streamId) {
-        gumFunction(
-            [ 'desktop' ],
-            stream => onSuccess({
+        const gumOptions = {
+            desktopStream: streamId,
+            ...options.gumOptions
+        };
+
+        gumFunction([ 'desktop' ], gumOptions)
+            .then(stream => onSuccess({
                 stream,
                 sourceId: streamId,
                 sourceType: streamType
-            }),
-            onFailure,
-            {
-                desktopStream: streamId,
-                ...options.gumOptions
-            });
+            }), onFailure);
     } else {
         // As noted in Chrome Desktop Capture API:
         // If user didn't select any source (i.e. canceled the prompt)

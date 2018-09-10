@@ -1699,10 +1699,7 @@ TraceablePeerConnection.prototype._adjustLocalMediaDirection = function(
     return localDescription;
 };
 
-TraceablePeerConnection.prototype.setLocalDescription = function(
-        description,
-        successCallback,
-        failureCallback) {
+TraceablePeerConnection.prototype.setLocalDescription = function(description) {
     let localSdp = description;
 
     this.trace('setLocalDescription::preTransform', dumpSDP(localSdp));
@@ -1740,26 +1737,26 @@ TraceablePeerConnection.prototype.setLocalDescription = function(
             dumpSDP(localSdp));
     }
 
-    this.peerconnection.setLocalDescription(localSdp,
-        () => {
-            this.trace('setLocalDescriptionOnSuccess');
-            const localUfrag = SDPUtil.getUfrag(localSdp.sdp);
+    return new Promise((resolve, reject) => {
+        this.peerconnection.setLocalDescription(localSdp)
+            .then(() => {
+                this.trace('setLocalDescriptionOnSuccess');
+                const localUfrag = SDPUtil.getUfrag(localSdp.sdp);
 
-            if (localUfrag !== this.localUfrag) {
-                this.localUfrag = localUfrag;
+                if (localUfrag !== this.localUfrag) {
+                    this.localUfrag = localUfrag;
+                    this.eventEmitter.emit(
+                        RTCEvents.LOCAL_UFRAG_CHANGED, this, localUfrag);
+                }
+                resolve();
+            }, err => {
+                this.trace('setLocalDescriptionOnFailure', err);
                 this.eventEmitter.emit(
-                    RTCEvents.LOCAL_UFRAG_CHANGED, this, localUfrag);
-            }
-            successCallback();
-        },
-        err => {
-            this.trace('setLocalDescriptionOnFailure', err);
-            this.eventEmitter.emit(
-                RTCEvents.SET_LOCAL_DESCRIPTION_FAILED,
-                err, this);
-            failureCallback(err);
-        }
-    );
+                    RTCEvents.SET_LOCAL_DESCRIPTION_FAILED,
+                    err, this);
+                reject(err);
+            });
+    });
 };
 
 /**
@@ -1825,10 +1822,7 @@ TraceablePeerConnection.prototype._insertUnifiedPlanSimulcastReceive
         });
     };
 
-TraceablePeerConnection.prototype.setRemoteDescription = function(
-        description,
-        successCallback,
-        failureCallback) {
+TraceablePeerConnection.prototype.setRemoteDescription = function(description) {
     this.trace('setRemoteDescription::preTransform', dumpSDP(description));
 
     // TODO the focus should squeze or explode the remote simulcast
@@ -1895,27 +1889,27 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(
         description = this._injectH264IfNotPresent(description);
     }
 
-    this.peerconnection.setRemoteDescription(
-        description,
-        () => {
-            this.trace('setRemoteDescriptionOnSuccess');
-            const remoteUfrag = SDPUtil.getUfrag(description.sdp);
+    return new Promise((resolve, reject) => {
+        this.peerconnection.setRemoteDescription(description)
+            .then(() => {
+                this.trace('setRemoteDescriptionOnSuccess');
+                const remoteUfrag = SDPUtil.getUfrag(description.sdp);
 
-            if (remoteUfrag !== this.remoteUfrag) {
-                this.remoteUfrag = remoteUfrag;
+                if (remoteUfrag !== this.remoteUfrag) {
+                    this.remoteUfrag = remoteUfrag;
+                    this.eventEmitter.emit(
+                        RTCEvents.REMOTE_UFRAG_CHANGED, this, remoteUfrag);
+                }
+                resolve();
+            }, err => {
+                this.trace('setRemoteDescriptionOnFailure', err);
                 this.eventEmitter.emit(
-                    RTCEvents.REMOTE_UFRAG_CHANGED, this, remoteUfrag);
-            }
-            successCallback();
-        },
-        err => {
-            this.trace('setRemoteDescriptionOnFailure', err);
-            this.eventEmitter.emit(
-                RTCEvents.SET_REMOTE_DESCRIPTION_FAILED,
-                err,
-                this);
-            failureCallback(err);
-        });
+                    RTCEvents.SET_REMOTE_DESCRIPTION_FAILED,
+                    err,
+                    this);
+                reject(err);
+            });
+    });
 };
 
 /**
@@ -2123,10 +2117,7 @@ const _fixAnswerRFC4145Setup = function(offer, answer) {
     }
 };
 
-TraceablePeerConnection.prototype.createAnswer = function(
-        successCallback,
-        failureCallback,
-        constraints) {
+TraceablePeerConnection.prototype.createAnswer = function(constraints) {
     if (browser.supportsRtpSender() && this.isSimulcastOn()) {
         const videoSender
             = this.peerconnection.getSenders().find(sender =>
@@ -2149,30 +2140,22 @@ TraceablePeerConnection.prototype.createAnswer = function(
 
         videoSender.setParameters(simParams);
     }
-    this._createOfferOrAnswer(
-        false /* answer */, successCallback, failureCallback, constraints);
+
+    return this._createOfferOrAnswer(false /* answer */, constraints);
 };
 
-TraceablePeerConnection.prototype.createOffer = function(
-        successCallback,
-        failureCallback,
-        constraints) {
-    this._createOfferOrAnswer(
-        true /* offer */, successCallback, failureCallback, constraints);
+TraceablePeerConnection.prototype.createOffer = function(constraints) {
+    return this._createOfferOrAnswer(true /* offer */, constraints);
 };
-
-/* eslint-disable max-params */
 
 TraceablePeerConnection.prototype._createOfferOrAnswer = function(
         isOffer,
-        successCallback,
-        failureCallback,
         constraints) {
     const logName = isOffer ? 'Offer' : 'Answer';
 
     this.trace(`create${logName}`, JSON.stringify(constraints, null, ' '));
 
-    const _successCallback = resultSdp => {
+    const handleSuccess = (resultSdp, resolveFn, rejectFn) => {
         try {
             this.trace(
                 `create${logName}OnSuccess::preTransform`, dumpSDP(resultSdp));
@@ -2225,7 +2208,6 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
 
             // Add simulcast streams if simulcast is enabled
             if (this.isSimulcastOn()) {
-
                 // eslint-disable-next-line no-param-reassign
                 resultSdp = this.simulcast.mungeLocalDescription(resultSdp);
                 this.trace(
@@ -2268,16 +2250,17 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
             logger.debug('Got local SSRCs MAP: ', ssrcMap);
             this._processLocalSSRCsMap(ssrcMap);
 
-            successCallback(resultSdp);
+            resolveFn(resultSdp);
         } catch (e) {
             this.trace(`create${logName}OnError`, e);
             this.trace(`create${logName}OnError`, dumpSDP(resultSdp));
             logger.error(`create${logName}OnError`, e, dumpSDP(resultSdp));
-            failureCallback(e);
+
+            rejectFn(e);
         }
     };
 
-    const _errorCallback = err => {
+    const handleFailure = (err, rejectFn) => {
         this.trace(`create${logName}OnFailure`, err);
         const eventType
             = isOffer
@@ -2285,19 +2268,25 @@ TraceablePeerConnection.prototype._createOfferOrAnswer = function(
                 : RTCEvents.CREATE_ANSWER_FAILED;
 
         this.eventEmitter.emit(eventType, err, this);
-        failureCallback(err);
+
+        rejectFn(err);
     };
 
-    if (isOffer) {
-        this.peerconnection.createOffer(
-            _successCallback, _errorCallback, constraints);
-    } else {
-        this.peerconnection.createAnswer(
-            _successCallback, _errorCallback, constraints);
-    }
-};
+    return new Promise((resolve, reject) => {
+        let oaPromise;
 
-/* eslint-enable max-params */
+        if (isOffer) {
+            oaPromise = this.peerconnection.createOffer(constraints);
+        } else {
+            oaPromise = this.peerconnection.createAnswer(constraints);
+        }
+
+        oaPromise
+            .then(
+                sdp => handleSuccess(sdp, resolve, reject),
+                error => handleFailure(error, reject));
+    });
+};
 
 /**
  * Extract primary SSRC from given {@link TrackSSRCInfo} object.
@@ -2363,18 +2352,15 @@ TraceablePeerConnection.prototype._processLocalSSRCsMap = function(ssrcMap) {
     }
 };
 
-TraceablePeerConnection.prototype.addIceCandidate = function(
-        candidate,
-        successCallback,
-        failureCallback) {
+TraceablePeerConnection.prototype.addIceCandidate = function(candidate) {
     this.trace('addIceCandidate', JSON.stringify({
         candidate: candidate.candidate,
         sdpMid: candidate.sdpMid,
         sdpMLineIndex: candidate.sdpMLineIndex,
         usernameFragment: candidate.usernameFragment
     }, null, ' '));
-    this.peerconnection.addIceCandidate(
-        candidate, successCallback, failureCallback);
+
+    return this.peerconnection.addIceCandidate(candidate);
 };
 
 /**
@@ -2390,16 +2376,8 @@ TraceablePeerConnection.prototype.getStats = function(callback, errback) {
     // TODO (brian): After moving all browsers to adapter, check if adapter is
     // accounting for different getStats apis, making the browser-checking-if
     // unnecessary.
-    if (browser.isReactNative()) {
-        this.peerconnection.getStats(
-            null,
-            callback,
-            errback || (() => {
-
-                // Making sure that getStats won't fail if error callback is
-                // not passed.
-            }));
-    } else if (browser.isSafariWithWebrtc() || browser.isFirefox()) {
+    if (browser.isSafariWithWebrtc() || browser.isFirefox()
+            || browser.isReactNative()) {
         // uses the new Promise based getStats
         this.peerconnection.getStats()
             .then(callback)
