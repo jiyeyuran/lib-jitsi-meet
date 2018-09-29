@@ -594,8 +594,7 @@ TraceablePeerConnection.prototype._remoteStreamAdded = function(stream) {
     }
 
     // Bind 'addtrack'/'removetrack' event handlers
-    if (browser.isChrome() || browser.isNWJS()
-        || browser.isElectron() || browser.isEdge()) {
+    if (browser.isChromiumBased() || browser.isEdge()) {
         stream.onaddtrack = event => {
             this._remoteTrackAdded(stream, event.track);
         };
@@ -2448,9 +2447,12 @@ TraceablePeerConnection.prototype.generateNewStreamSSRCInfo = function(track) {
 };
 
 const handleLayerSuspension = function(peerConnection, isSelected) {
-    if (typeof peerConnection.getSenders !== 'function') {
+    if (!peerConnection.getSenders) {
+        logger.debug('Browser doesn\'t support RTPSender');
+
         return;
     }
+
     const videoSender = peerConnection.getSenders()
         .find(sender => sender.track.kind === 'video');
 
@@ -2459,13 +2461,8 @@ const handleLayerSuspension = function(peerConnection, isSelected) {
 
         return;
     }
-    if (typeof videoSender.getParameters !== 'function') {
+    if (!videoSender.getParameters || !videoSender.setParameters) {
         logger.warn('Browser doesn\'t support RTPSender parameters');
-
-        return;
-    }
-    if (typeof videoSender.setParameters !== 'function') {
-        logger.warn('Browser doesn\'t support RTPSender setting parameters');
 
         return;
     }
