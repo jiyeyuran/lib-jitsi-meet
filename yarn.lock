@@ -578,6 +578,10 @@ babel-plugin-syntax-export-extensions@^6.8.0:
   version "6.13.0"
   resolved "https://registry.npmjs.org/babel-plugin-syntax-export-extensions/-/babel-plugin-syntax-export-extensions-6.13.0.tgz#70a1484f0f9089a4e84ad44bac353c95b9b12721"
 
+babel-plugin-syntax-flow@^6.18.0:
+  version "6.18.0"
+  resolved "http://registry.npm.taobao.org/babel-plugin-syntax-flow/download/babel-plugin-syntax-flow-6.18.0.tgz#4c3ab20a2af26aa20cd25995c398c4eb70310c8d"
+
 babel-plugin-syntax-object-rest-spread@^6.8.0:
   version "6.13.0"
   resolved "https://registry.npmjs.org/babel-plugin-syntax-object-rest-spread/-/babel-plugin-syntax-object-rest-spread-6.13.0.tgz#fd6536f2bce13836ffa3a5458c4903a597bb3bf5"
@@ -812,6 +816,13 @@ babel-plugin-transform-export-extensions@^6.22.0:
     babel-plugin-syntax-export-extensions "^6.8.0"
     babel-runtime "^6.22.0"
 
+babel-plugin-transform-flow-strip-types@^6.22.0:
+  version "6.22.0"
+  resolved "http://registry.npm.taobao.org/babel-plugin-transform-flow-strip-types/download/babel-plugin-transform-flow-strip-types-6.22.0.tgz#84cb672935d43714fdc32bce84568d87441cf7cf"
+  dependencies:
+    babel-plugin-syntax-flow "^6.18.0"
+    babel-runtime "^6.22.0"
+
 babel-plugin-transform-object-rest-spread@^6.22.0:
   version "6.26.0"
   resolved "https://registry.npmjs.org/babel-plugin-transform-object-rest-spread/-/babel-plugin-transform-object-rest-spread-6.26.0.tgz#0f36692d50fef6b7e2d4b3ac1478137a963b7b06"
@@ -866,6 +877,12 @@ babel-preset-env@1.6.1:
     browserslist "^2.1.2"
     invariant "^2.2.2"
     semver "^5.3.0"
+
+babel-preset-flow@6.23.0:
+  version "6.23.0"
+  resolved "http://registry.npm.taobao.org/babel-preset-flow/download/babel-preset-flow-6.23.0.tgz#e71218887085ae9a24b5be4169affb599816c49d"
+  dependencies:
+    babel-plugin-transform-flow-strip-types "^6.22.0"
 
 babel-preset-stage-1@6.24.1:
   version "6.24.1"
@@ -3002,15 +3019,20 @@ jasmine-core@2.5.2:
   version "0.1.1"
   resolved "https://codeload.github.com/jitsi/jitsi-meet-logger/tar.gz/6fff754a77a56ab52499f3559105a15886942a1e"
 
+js-md5@0.7.3:
+  version "0.7.3"
+  resolved "http://registry.npm.taobao.org/js-md5/download/js-md5-0.7.3.tgz#b4f2fbb0b327455f598d6727e38ec272cd09c3f2"
+
 js-tokens@^3.0.0, js-tokens@^3.0.2:
   version "3.0.2"
   resolved "https://registry.npmjs.org/js-tokens/-/js-tokens-3.0.2.tgz#9866df395102130e38f7f996bceb65443209c25b"
 
-"js-utils@github:jitsi/js-utils#d4b78721b754a15c2588b7b0c621a9fff6fa1363":
+"js-utils@github:jitsi/js-utils#446497893023aa8dec403e0e4e35a22cae6bc87d":
   version "0.0.0"
-  resolved "https://codeload.github.com/jitsi/js-utils/tar.gz/d4b78721b754a15c2588b7b0c621a9fff6fa1363"
+  resolved "https://codeload.github.com/jitsi/js-utils/tar.gz/446497893023aa8dec403e0e4e35a22cae6bc87d"
   dependencies:
     bowser "1.9.1"
+    js-md5 "0.7.3"
 
 js-yaml@^3.9.1:
   version "3.10.0"
