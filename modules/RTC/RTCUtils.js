@@ -180,8 +180,7 @@ function getConstraints(um, options = {}) {
     const isNewStyleConstraintsSupported
         = browser.isFirefox()
             || browser.isEdge()
-            || browser.isReactNative()
-            || browser.isSafariWithWebrtc();
+            || browser.isReactNative();
 
     if (um.indexOf('video') >= 0) {
         // same behaviour as true
@@ -364,7 +363,11 @@ function newGetConstraints(um = [], options = {}) {
         } else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
 
-            constraints.video.facingMode = facingMode;
+            if (browser.isSafariWithWebrtc()) {
+                constraints.video.facingMode = {exact: facingMode};
+            } else {
+                constraints.video.facingMode = facingMode;
+            }
         }
     } else {
         constraints.video = false;
