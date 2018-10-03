@@ -359,15 +359,13 @@ function newGetConstraints(um = [], options = {}) {
         }
 
         if (options.cameraDeviceId) {
-            constraints.video.deviceId = options.cameraDeviceId;
+            constraints.video.deviceId = browser.isSafariWithWebrtc()
+                ? {exact: options.cameraDeviceId} : options.cameraDeviceId;
         } else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
 
-            if (browser.isSafariWithWebrtc()) {
-                constraints.video.facingMode = {exact: facingMode};
-            } else {
-                constraints.video.facingMode = facingMode;
-            }
+            constraints.video.facingMode = browser.isSafariWithWebrtc() ?
+                {exact: facingMode} : facingMode;
         }
     } else {
         constraints.video = false;
@@ -1413,7 +1411,9 @@ class RTCUtils extends Listenable {
         return deviceType === 'output' || deviceType === 'audiooutput'
             ? isAudioOutputDeviceChangeAvailable
             : browser.isChromiumBased()
-                || browser.isFirefox() || browser.isEdge();
+                || browser.isFirefox()
+                || browser.isEdge()
+                || browser.isSafariWithWebrtc();
     }
 
     /**
