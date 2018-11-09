@@ -9,9 +9,9 @@ import ConnectionPlugin from './ConnectionPlugin';
 const logger = getLogger(__filename);
 
 /**
- * Ping every 30 sec
+ * Ping every 10 sec
  */
-const PING_INTERVAL = 30000;
+const PING_INTERVAL = 10000;
 
 /**
  * Ping timeout error after 15 sec of waiting.

@@ -360,12 +360,12 @@ function newGetConstraints(um = [], options = {}) {
 
         if (options.cameraDeviceId) {
             constraints.video.deviceId = browser.isSafariWithWebrtc()
-                ? {exact: options.cameraDeviceId} : options.cameraDeviceId;
+                ? { exact: options.cameraDeviceId } : options.cameraDeviceId;
         } else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
 
-            constraints.video.facingMode = browser.isSafariWithWebrtc() ?
-                {exact: facingMode} : facingMode;
+            constraints.video.facingMode = browser.isSafariWithWebrtc()
+                ? { exact: facingMode } : facingMode;
         }
     } else {
         constraints.video = false;

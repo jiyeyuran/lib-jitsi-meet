@@ -114,7 +114,6 @@ export default class XMPP extends Listenable {
         if (this.connection.rayo) {
             this.caps.addFeature('urn:xmpp:rayo:client:1');
         }
-        this.caps.submit();
     }
 
     /**
@@ -140,7 +139,9 @@ export default class XMPP extends Listenable {
         const statusStr = Strophe.getStatusString(status).toLowerCase();
 
         this.connectionTimes[statusStr] = now;
-        logger.log(`(TIME) Strophe ${statusStr}${msg ? `[${msg}]` : ''}:`, now);
+        logger.log(
+            `(TIME) Strophe ${statusStr}${msg ? `[${msg}]` : ''}:\t`,
+            now);
         if (status === Strophe.Status.CONNECTED
             || status === Strophe.Status.ATTACHED) {
             if (this.options.useStunTurn
@@ -151,19 +152,17 @@ export default class XMPP extends Listenable {
             logger.info(`My Jabber ID: ${this.connection.jid}`);
 
             // Schedule ping ?
-            if (this.options.enablePing) {
-                const pingJid = this.connection.domain;
+            const pingJid = this.connection.domain;
 
-                this.connection.ping.hasPingSupport(
-                    pingJid,
-                    hasPing => {
-                        if (hasPing) {
-                            this.connection.ping.startInterval(pingJid);
-                        } else {
-                            logger.warn(`Ping NOT supported by ${pingJid}`);
-                        }
-                    });
-            }
+            this.connection.ping.hasPingSupport(
+                pingJid,
+                hasPing => {
+                    if (hasPing) {
+                        this.connection.ping.startInterval(pingJid);
+                    } else {
+                        logger.warn(`Ping NOT supported by ${pingJid}`);
+                    }
+                });
 
             if (credentials.password) {
                 this.authenticatedUser = true;
@@ -469,18 +468,18 @@ export default class XMPP extends Listenable {
             { urls: 'stun:stun2.l.google.com:19302' }
         ];
 
-        if (Array.isArray(this.options.stunServers)) {
-            iceConfig.jvb.iceServers = this.options.stunServers;
-            iceConfig.jvb.iceTransports = iceConfig.jvb.iceTransportPolicy
-                = 'relay';
-        }
-
         const p2pStunServers = (this.options.p2p
             && this.options.p2p.stunServers) || defaultStunServers;
 
         if (Array.isArray(p2pStunServers)) {
             logger.info('P2P STUN servers: ', p2pStunServers);
             iceConfig.p2p.iceServers = p2pStunServers;
+        }
+
+        if (this.options.p2p && this.options.p2p.iceTransportPolicy) {
+            logger.info('P2P ICE transport policy: ',
+                this.options.p2p.iceTransportPolicy);
+
             iceConfig.p2p.iceTransports = iceConfig.p2p.iceTransportPolicy
                 = this.options.p2p.iceTransportPolicy;
         }
