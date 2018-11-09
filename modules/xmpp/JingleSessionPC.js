@@ -362,9 +362,6 @@ export default class JingleSessionPC extends JingleSession {
             if (!this.peerconnection) {
                 return;
             }
-            logger.log(
-                `(TIME) ICE signaling ${this.peerconnection.signalingState}`
-                    + ` P2P? ${this.isP2P}:`, window.performance.now());
             if (this.peerconnection.signalingState === 'stable') {
                 this.wasstable = true;
             } else if (
@@ -395,7 +392,8 @@ export default class JingleSessionPC extends JingleSession {
             }
             logger.log(
                 `(TIME) ICE ${this.peerconnection.iceConnectionState}`
-                    + ` P2P? ${this.isP2P}:`, now);
+                    + ` P2P? ${this.isP2P}:\t`,
+                now);
 
             Statistics.sendAnalytics(
                 ICE_STATE_CHANGED,
@@ -477,7 +475,6 @@ export default class JingleSessionPC extends JingleSession {
             case 'failed':
                 this.room.eventEmitter.emit(
                     XMPPEvents.CONNECTION_ICE_FAILED, this);
-
                 this.room.eventEmitter.emit(
                     XMPPEvents.CONFERENCE_SETUP_FAILED,
                     this,
@@ -860,7 +857,7 @@ export default class JingleSessionPC extends JingleSession {
             init,
             this.isInitiator ? 'initiator' : 'responder');
         init = init.tree();
-        logger.debug('Session-initiate: ', init);
+        logger.info('Session-initiate: ', init);
         this.connection.sendIQ(init,
             () => {
                 logger.info('Got RESULT for "session-initiate"');
@@ -1048,7 +1045,7 @@ export default class JingleSessionPC extends JingleSession {
 
         // Calling tree() to print something useful
         accept = accept.tree();
-        logger.debug('Sending session-accept', accept);
+        logger.info('Sending session-accept', accept);
         this.connection.sendIQ(accept,
             success,
             this.newJingleErrorHandler(accept, error => {
@@ -1403,7 +1400,7 @@ export default class JingleSessionPC extends JingleSession {
                     const newLocalSdp
                         = new SDP(this.peerconnection.localDescription.sdp);
 
-                    logger.debug(
+                    logger.log(
                         `${logPrefix} - OK, SDPs: `, oldLocalSdp, newLocalSdp);
                     this.notifyMySSRCUpdate(oldLocalSdp, newLocalSdp);
                     finishedCallback();
@@ -1570,8 +1567,8 @@ export default class JingleSessionPC extends JingleSession {
     _initiatorRenegotiate(remoteDescription) {
         if (this.peerconnection.signalingState === 'have-local-offer') {
             // Skip createOffer and setLocalDescription or FF will fail
-            logger.info(
-                'Renegotiate have-local-offer: setting remote description');
+            logger.debug(
+                'Renegotiate: setting remote description');
 
             /* eslint-disable arrow-body-style */
 
