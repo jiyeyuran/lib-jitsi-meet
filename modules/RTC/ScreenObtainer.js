@@ -522,12 +522,8 @@ function isUpdateRequired(minVersion, extVersion) {
  */
 function checkChromeExtInstalled(callback, options) {
     if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
-        // No API, detect extension icon.png
-        const image = document.createElement('img');
-
-        image.src = 'chrome-extension://' + extId + '/icon.png';
-        image.onerror = callback.bind(null, false, false);
-        image.onload = callback.bind(null, true, true);
+        // No API, so no extension for sure
+        callback(false, false);
 
         return;
     }
