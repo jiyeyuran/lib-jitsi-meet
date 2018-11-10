@@ -12,7 +12,6 @@ import XMPPEvents from '../../service/xmpp/XMPPEvents';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import RandomUtil from '../util/RandomUtil';
 import Statistics from '../statistics/statistics';
-import browser from '../browser';
 
 import JingleSessionPC from './JingleSessionPC';
 import ConnectionPlugin from './ConnectionPlugin';
