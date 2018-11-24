@@ -181,7 +181,10 @@ export default class ChatRoom extends Listenable {
     initPresenceMap(options = {}) {
         this.presMap.to = this.myroomjid;
         this.presMap.xns = 'http://jabber.org/protocol/muc';
-        this.presMap.nodes = [];
+        this.presMap.nodes = [ {
+            'tagName': 'user-agent',
+            'value': navigator.userAgent
+        } ];
 
         if (options.enableStatsID) {
             this.presMap.nodes.push({
