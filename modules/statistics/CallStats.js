@@ -192,9 +192,6 @@ export default class CallStats {
      * @private
      */
     static _reportError(cs, type, error, pc) {
-        if (!CallStats.backend) {
-            return;
-        }
         let _error = error;
 
         if (!_error) {
@@ -357,9 +354,6 @@ export default class CallStats {
                 return;
             }
 
-            // In react-native we need to import the callstats module, but
-            // imports are only allowed at top-level, so we must use require
-            // here. Sigh.
             // const CallStatsBackend
             //     = browser.isReactNative()
             //         ? require('react-native-callstats/callstats')
@@ -367,9 +361,7 @@ export default class CallStats {
             const CallStatsBackend = callstats;
 
             CallStats.backend = new CallStatsBackend();
-
             CallStats._traceAndCatchBackendCalls(CallStats.backend);
-
             CallStats.userID = {
                 aliasName: options.aliasName,
                 userName: options.userName
