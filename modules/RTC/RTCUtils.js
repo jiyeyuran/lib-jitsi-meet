@@ -1014,10 +1014,10 @@ class RTCUtils extends Listenable {
      * @param {Object} options
      * @param {Object} options.desktopSharingExtensionExternalInstallation
      * @param {string[]} options.desktopSharingSources
-     * @param {Object} options.gumOptions.frameRate
-     * @param {Object} options.gumOptions.frameRate.min - Minimum fps
-     * @param {Object} options.gumOptions.frameRate.max - Maximum fps
-     * @returns {Promise} A promise which will be resolved with an object whic
+     * @param {Object} options.desktopSharingFrameRate
+     * @param {Object} options.desktopSharingFrameRate.min - Minimum fps
+     * @param {Object} options.desktopSharingFrameRate.max - Maximum fps
+     * @returns {Promise} A promise which will be resolved with an object which
      * contains the acquired display stream. If desktop sharing is not supported
      * then a rejected promise will be returned.
      */
@@ -1029,8 +1029,8 @@ class RTCUtils extends Listenable {
 
         const {
             desktopSharingExtensionExternalInstallation,
-            desktopSharingSources,
-            gumOptions
+            desktopSharingFrameRate,
+            desktopSharingSources
         } = options;
 
         return new Promise((resolve, reject) => {
@@ -1038,7 +1038,9 @@ class RTCUtils extends Listenable {
                 {
                     ...desktopSharingExtensionExternalInstallation,
                     desktopSharingSources,
-                    gumOptions,
+                    gumOptions: {
+                        frameRate: desktopSharingFrameRate
+                    },
                     trackOptions: getTrackSSConstraints(options)
                 },
                 stream => {
@@ -1326,9 +1328,7 @@ class RTCUtils extends Listenable {
             return this._newGetDesktopMedia({
                 desktopSharingExtensionExternalInstallation,
                 desktopSharingSources,
-                gumOptions: {
-                    frameRate: desktopSharingFrameRate
-                }
+                desktopSharingFrameRate
             });
         }.bind(this);
 
