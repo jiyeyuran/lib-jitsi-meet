@@ -182,7 +182,7 @@ const SDPUtil = {
                 candidate.tcptype = elems[i + 1];
                 break;
             default: // TODO
-                logger.debug(
+                logger.log(
                     `parseICECandidate not translating "${
                         elems[i]}" = "${elems[i + 1]}"`);
             }
@@ -385,7 +385,7 @@ const SDPUtil = {
                 candidate.tcptype = elems[i + 1];
                 break;
             default: // TODO
-                logger.debug(`not translating "${elems[i]}"="${elems[i + 1]}"`);
+                logger.log(`not translating "${elems[i]}" = "${elems[i + 1]}"`);
             }
         }
         candidate.network = '1';
@@ -670,10 +670,14 @@ const SDPUtil = {
 
     /**
      * Set bandwidth use b=AS:xxx
-     * @param {object} sdp - Remote sdp.
+     * @param {string} sdp - Remote sdp.
      * @param {number | object} bandwidth - Bandwidth to be limited.
      */
     setBandwidth(sdp, bandwidth) {
+        if (typeof bandwidth === 'number') {
+            // eslint-disable-next-line no-param-reassign
+            bandwidth = { video: bandwidth };
+        }
         if (typeof bandwidth !== 'object') {
             return sdp;
         }

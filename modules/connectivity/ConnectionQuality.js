@@ -421,7 +421,7 @@ export default class ConnectionQuality {
 
         // Make sure that the quality doesn't climb quickly
         if (this._lastConnectionQualityUpdate > 0) {
-            const maxIncreasePerSecond = 5;
+            const maxIncreasePerSecond = 2;
             const prevConnectionQuality = this._localStats.connectionQuality;
             const diffSeconds
                 = (window.performance.now() - this._lastConnectionQualityUpdate)
@@ -499,6 +499,7 @@ export default class ConnectionQuality {
             return;
         }
 
+        let key;
         const updateLocalConnectionQuality
             = !this._conference.isConnectionInterrupted();
         const localVideoTrack
@@ -512,7 +513,12 @@ export default class ConnectionQuality {
             this._maybeUpdateUnmuteTime();
         }
 
-        Object.assign(this._localStats, data);
+        // Copy the fields already in 'data'.
+        for (key in data) {
+            if (data.hasOwnProperty(key)) {
+                this._localStats[key] = data[key];
+            }
+        }
 
         // And re-calculate the connectionQuality field.
         if (updateLocalConnectionQuality) {

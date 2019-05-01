@@ -471,22 +471,17 @@ export default class JingleSessionPC extends JingleSession {
                 this.isReconnect = false;
                 break;
             case 'disconnected':
-                // If JVB PeerConnection closed before jingle message back,
-                // oniceconnectionstatechange will be called which results
-                // emitting CONNECTION_INTERRUPTED.
-                setTimeout(() => {
-                    if (this.closed) {
-                        return;
-                    }
-                    this.isReconnect = true;
+                if (this.closed) {
+                    break;
+                }
+                this.isReconnect = true;
 
-                    // Informs interested parties that the connection has been
-                    // interrupted.
-                    if (this.wasstable) {
-                        this.room.eventEmitter.emit(
-                            XMPPEvents.CONNECTION_INTERRUPTED, this);
-                    }
-                }, 1500);
+                // Informs interested parties that the connection has been
+                // interrupted.
+                if (this.wasstable) {
+                    this.room.eventEmitter.emit(
+                        XMPPEvents.CONNECTION_INTERRUPTED, this);
+                }
                 break;
             case 'failed':
                 this.room.eventEmitter.emit(

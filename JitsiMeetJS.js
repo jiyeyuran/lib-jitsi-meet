@@ -31,7 +31,6 @@ import ProxyConnectionService
     from './modules/proxyconnection/ProxyConnectionService';
 import Statistics from './modules/statistics/statistics';
 import * as VideoSIPGWConstants from './modules/videosipgw/VideoSIPGWConstants';
-import Settings from './modules/settings/Settings';
 
 const logger = Logger.getLogger(__filename);
 
@@ -382,7 +381,7 @@ export default _mergeNamespaceAndModule({
 
                 if (error.name === JitsiTrackErrors.UNSUPPORTED_RESOLUTION
                     && !browser.usesNewGumFlow()) {
-                    const oldResolution = options.resolution || '360';
+                    const oldResolution = options.resolution || '720';
                     const newResolution = getLowerResolution(oldResolution);
 
                     if (newResolution !== null) {
@@ -555,13 +554,6 @@ export default _mergeNamespaceAndModule({
     },
 
     /* eslint-enable max-params */
-
-    /**
-     * @returns the unique id of the browser.
-     */
-    getMachineId() {
-        return Settings.machineId;
-    },
 
     /**
      * Represents a hub/namespace for utility functionality which may be of

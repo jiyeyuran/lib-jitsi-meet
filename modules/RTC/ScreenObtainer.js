@@ -1,4 +1,4 @@
-/* global chrome, $, alert, config */
+/* global chrome, $, alert */
 
 import JitsiTrackError from '../../JitsiTrackError';
 import * as JitsiTrackErrors from '../../JitsiTrackErrors';
@@ -252,7 +252,7 @@ const ScreenObtainer = {
         } else {
             if (chromeExtUpdateRequired) {
                 /* eslint-disable no-alert */
-                alert('简会桌面分享插件需要更新');
+                alert('Desktop sharing extension requires update.');
 
                 /* eslint-enable no-alert */
             }
@@ -266,9 +266,8 @@ const ScreenObtainer = {
 
     handleExternalInstall(options, streamCallback, failCallback, e) {
         const webStoreInstallUrl = getWebStoreInstallUrl(this.options);
-        const url = config.desktopSharingChromeExtUrl || webStoreInstallUrl;
 
-        options.listener('waitingForExtension', url);
+        options.listener('waitingForExtension', webStoreInstallUrl);
         this.checkForChromeExtensionOnInterval(options, streamCallback,
             failCallback, e);
     },
@@ -359,6 +358,10 @@ function obtainWebRTCScreen(options, streamCallback, failCallback) {
  * @returns {string}
  */
 function getWebStoreInstallUrl(options) {
+    if (options.desktopSharingChromeExtUrl) {
+        return options.desktopSharingChromeExtUrl;
+    }
+
     return (
         `https://chrome.google.com/webstore/detail/${
             options.desktopSharingChromeExtId}`);

@@ -54,12 +54,12 @@ export default function() {
         // Strophe log entry about secondary request timeout does not mean that
         // it's a final failure(the request will be restarted), so we lower it's
         // level here to a warning.
-        // logger.trace('Strophe', level, msg);
+        logger.trace('Strophe', level, msg);
         if (typeof msg === 'string'
-                && msg.toLowerCase().indexOf('request ') !== -1) {
+                && msg.indexOf('Request ') !== -1
+                && msg.indexOf('timed out (secondary), restarting') !== -1) {
             // eslint-disable-next-line no-param-reassign
-            // level = Strophe.LogLevel.WARN;
-            return;
+            level = Strophe.LogLevel.WARN;
         }
 
         /* eslint-disable no-case-declarations */

@@ -156,7 +156,7 @@ class JingleConnectionPlugin extends ConnectionPlugin {
                     fromJid,
                     this.connection,
                     this.mediaConstraints,
-                    this.p2pIceConfig,
+                    isP2P ? this.p2pIceConfig : this.jvbIceConfig,
                     isP2P,
                     /* initiator */ false);
 

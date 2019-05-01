@@ -23,7 +23,7 @@ const DEFAULT_NOT_IN_LAST_N_TIMEOUT = 500;
  *
  * @type {number}
  */
-const DEFAULT_RTC_MUTE_TIMEOUT = 5000;
+const DEFAULT_RTC_MUTE_TIMEOUT = 2000;
 
 /**
  * The time to wait a track to be restored. Track which was out of lastN
@@ -564,7 +564,7 @@ export default class ParticipantConnectionStatusHandler {
             // fired),
             // so we don't care, but let's print the warning for
             // debugging purpose
-            logger.info(`figure out conn status - no participant for: ${id}`);
+            logger.warn(`figure out conn status - no participant for: ${id}`);
 
             return;
         }

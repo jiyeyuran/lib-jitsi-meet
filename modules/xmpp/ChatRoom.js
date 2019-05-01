@@ -138,10 +138,7 @@ export default class ChatRoom extends Listenable {
     initPresenceMap(options = {}) {
         this.presMap.to = this.myroomjid;
         this.presMap.xns = 'http://jabber.org/protocol/muc';
-        this.presMap.nodes = [ {
-            'tagName': 'user-agent',
-            'value': navigator.userAgent
-        } ];
+        this.presMap.nodes = [];
 
         if (options.enableStatsID) {
             this.presMap.nodes.push({
@@ -934,7 +931,7 @@ export default class ChatRoom extends Listenable {
                         + '>not-allowed['
                         + 'xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"]')
                 .length) {
-            const content = $(pres).find('>error>text').text().trim();
+            const errText = $(pres).find('>error>text').text();
             const toDomain = Strophe.getDomainFromJid(pres.getAttribute('to'));
 
             if (toDomain === this.xmpp.options.hosts.anonymousdomain) {
@@ -942,19 +939,19 @@ export default class ChatRoom extends Listenable {
                 // result in reconnection from authorized domain.
                 // We're either missing Jicofo/Prosody config for anonymous
                 // domains or something is wrong.
-                this.eventEmitter.emit(XMPPEvents.ROOM_JOIN_ERROR, content);
+                this.eventEmitter.emit(XMPPEvents.ROOM_JOIN_ERROR, errText);
 
             } else {
                 logger.warn('onPresError ', pres);
                 this.eventEmitter.emit(
-                    XMPPEvents.ROOM_CONNECT_NOT_ALLOWED_ERROR, content);
+                    XMPPEvents.ROOM_CONNECT_NOT_ALLOWED_ERROR, errText);
             }
         } else if ($(pres).find('>error>service-unavailable').length) {
             logger.warn('Maximum users limit for the room has been reached',
                 pres);
-            const content = $(pres).find('>error>text').text().trim();
+            const errText = $(pres).find('>error>text').text();
 
-            this.eventEmitter.emit(XMPPEvents.ROOM_MAX_USERS_ERROR, content);
+            this.eventEmitter.emit(XMPPEvents.ROOM_MAX_USERS_ERROR, errText);
         } else {
             logger.warn('onPresError ', pres);
             this.eventEmitter.emit(XMPPEvents.ROOM_CONNECT_ERROR);

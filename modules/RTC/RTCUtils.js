@@ -40,7 +40,7 @@ const AVAILABLE_DEVICES_POLL_INTERVAL_TIME = 3000; // ms
  * This default is used for old gum flow only, as new gum flow uses
  * {@link DEFAULT_CONSTRAINTS}.
  */
-const OLD_GUM_DEFAULT_RESOLUTION = 360;
+const OLD_GUM_DEFAULT_RESOLUTION = 720;
 
 /**
  * Default devices to obtain when no specific devices are specified. This
@@ -359,13 +359,11 @@ function newGetConstraints(um = [], options = {}) {
         }
 
         if (options.cameraDeviceId) {
-            constraints.video.deviceId = browser.isSafariWithWebrtc()
-                ? { exact: options.cameraDeviceId } : options.cameraDeviceId;
+            constraints.video.deviceId = options.cameraDeviceId;
         } else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
 
-            constraints.video.facingMode = browser.isSafariWithWebrtc()
-                ? { exact: facingMode } : facingMode;
+            constraints.video.facingMode = facingMode;
         }
     } else {
         constraints.video = false;
@@ -1178,11 +1176,9 @@ class RTCUtils extends Listenable {
         return new Promise((resolve, reject) => {
             const deviceGUM = {
                 audio: (...args) =>
-                    this.getUserMediaWithConstraints(
-                        [ 'audio' ], ...args, options),
+                    this.getUserMediaWithConstraints([ 'audio' ], ...args),
                 video: (...args) =>
-                    this.getUserMediaWithConstraints(
-                        [ 'video' ], ...args, options),
+                    this.getUserMediaWithConstraints([ 'video' ], ...args),
                 desktop: (...args) =>
                     screenObtainer.obtainStream(
                         this._parseDesktopSharingOptions(options), ...args)
@@ -1446,9 +1442,7 @@ class RTCUtils extends Listenable {
         return deviceType === 'output' || deviceType === 'audiooutput'
             ? isAudioOutputDeviceChangeAvailable
             : browser.isChromiumBased()
-                || browser.isFirefox()
-                || browser.isEdge()
-                || browser.isSafariWithWebrtc();
+                || browser.isFirefox() || browser.isEdge();
     }
 
     /**
@@ -1457,6 +1451,10 @@ class RTCUtils extends Listenable {
      * @param mediaStream MediaStream object to stop.
      */
     stopMediaStream(mediaStream) {
+        if (!mediaStream) {
+            return;
+        }
+
         mediaStream.getTracks().forEach(track => {
             if (track.stop) {
                 track.stop();

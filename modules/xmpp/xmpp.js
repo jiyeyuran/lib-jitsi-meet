@@ -362,9 +362,28 @@ export default class XMPP extends Listenable {
     connect(jid, password) {
         if (!jid) {
             const { anonymousdomain, domain } = this.options.hosts;
+            let configDomain = anonymousdomain || domain;
+
+            // Force authenticated domain if room is appended with '?login=true'
+            // or if we're joining with the token
+
+            // FIXME Do not rely on window.location because (1) React Native
+            // does not have a window.location by default and (2) here we cannot
+            // know for sure that query/search has not be stripped from
+            // window.location by the time the following executes.
+            const { location } = window;
+
+            if (anonymousdomain) {
+                const search = location && location.search;
+
+                if ((search && search.indexOf('login=true') !== -1)
+                        || this.token) {
+                    configDomain = domain;
+                }
+            }
 
             // eslint-disable-next-line no-param-reassign
-            jid = this.token || password ? domain : anonymousdomain;
+            jid = configDomain || (location && location.hostname);
         }
 
         return this._connect(jid, password);
@@ -538,7 +557,7 @@ export default class XMPP extends Listenable {
             logger.info('P2P ICE transport policy: ',
                 this.options.p2p.iceTransportPolicy);
 
-            iceConfig.p2p.iceTransports = iceConfig.p2p.iceTransportPolicy
+            iceConfig.p2p.iceTransportPolicy
                 = this.options.p2p.iceTransportPolicy;
         }
 

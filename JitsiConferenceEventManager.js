@@ -318,7 +318,7 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
 
             conference.eventEmitter.emit(
                 JitsiConferenceEvents.MESSAGE_RECEIVED,
-                id, displayName, txt, ts);
+                id, txt, ts, displayName);
         });
 
     chatRoom.addListener(
@@ -330,7 +330,7 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
 
             conference.eventEmitter.emit(
                 JitsiConferenceEvents.PRIVATE_MESSAGE_RECEIVED,
-                id, txt, ts);
+                id, txt, ts, displayName);
         });
 
     chatRoom.addListener(XMPPEvents.PRESENCE_STATUS,

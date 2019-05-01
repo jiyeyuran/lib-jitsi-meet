@@ -350,14 +350,6 @@ export default class CallStats {
             throw new Error('CallStats backend has been initialized already!');
         }
         try {
-            if (browser.isReactNative()) {
-                return;
-            }
-
-            // const CallStatsBackend
-            //     = browser.isReactNative()
-            //         ? require('react-native-callstats/callstats')
-            //         : callstats;
             const CallStatsBackend = callstats;
 
             CallStats.backend = new CallStatsBackend();
