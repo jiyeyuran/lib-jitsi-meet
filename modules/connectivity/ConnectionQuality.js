@@ -216,7 +216,7 @@ export default class ConnectionQuality {
         this._timeLastBwCapRemoved = -1;
 
         // We assume a global startBitrate value for the sake of simplicity.
-        if (options.config && options.config.startBitrate) {
+        if (options.config.startBitrate && options.config.startBitrate > 0) {
             startBitrate = options.config.startBitrate;
         }
 
