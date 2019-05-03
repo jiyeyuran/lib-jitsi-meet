@@ -1118,8 +1118,8 @@ StatsCollector.prototype.processNewStatsReport = function() {
             const before = this.previousStatsReport.get(now.id);
 
             // correct ssrc from id
-            if (browser.isSafariWithWebrtc()) {
-                now.ssrc = parseInt(now.id.split('_').pop(), 10);
+            if (!now.ssrc && browser.isSafariWithWebrtc()) {
+                now.ssrc = now.id.split('_').pop();
             }
             const ssrc = this.getNonNegativeValue(now.ssrc);
 

@@ -1758,10 +1758,8 @@ TraceablePeerConnection.prototype.setLocalDescription = function(description) {
 
         if (this.options.disableH264) {
             SDPUtil.stripVideoCodec(videoMLine, 'h264');
-        } else if (this.options.preferH264 === true) {
-            SDPUtil.preferVideoCodec(videoMLine, 'h264');
         } else {
-            SDPUtil.preferVideoCodec(videoMLine, this.options.preferH264);
+            SDPUtil.preferVideoCodec(videoMLine, 'h264');
         }
 
         localSdp = new RTCSessionDescription({
@@ -1884,11 +1882,7 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(description) {
         const parsedSdp = transform.parse(description.sdp);
         const videoMLine = parsedSdp.media.find(m => m.type === 'video');
 
-        if (this.options.preferH264 === true) {
-            SDPUtil.preferVideoCodec(videoMLine, 'h264');
-        } else {
-            SDPUtil.preferVideoCodec(videoMLine, this.options.preferH264);
-        }
+        SDPUtil.preferVideoCodec(videoMLine, 'h264');
 
         // eslint-disable-next-line no-param-reassign
         description = new RTCSessionDescription({
@@ -2513,8 +2507,8 @@ const handleLayerSuspension = function(peerConnection, isSelected) {
 
         return;
     }
-    if (!videoSender.getParameters || !videoSender.setParameters) {
-        logger.warn('Browser doesn\'t support RTPSender parameters');
+    if (!videoSender.getParameters) {
+        logger.debug('Browser doesn\'t support RTPSender parameters');
 
         return;
     }
