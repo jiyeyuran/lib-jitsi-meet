@@ -619,6 +619,12 @@ export default class ChatRoom extends Listenable {
                 from,
                 member.status);
         }
+
+        // Set pending subject.
+        if (this.subject && this.isModerator()) {
+            this.setSubject(this.subject);
+            this.subject = null;
+        }
     }
 
     /**
