@@ -19,6 +19,7 @@ import * as MediaType from '../../service/RTC/MediaType';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import VideoType from '../../service/RTC/VideoType';
 import {
+    NO_BYTES_SENT,
     TRACK_UNMUTED,
     createNoDataFromSourceEvent
 } from '../../service/statistics/AnalyticsEvents';
@@ -140,12 +141,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
         // correspond to the id of a matching device from the available device list.
         this._realDeviceId = this.deviceId === '' ? undefined : this.deviceId;
 
-        /**
-         * On mute event we are waiting for 3s to check if the stream is going
-         * to be still muted before firing the event for camera issue detected
-         * (NO_DATA_FROM_SOURCE).
-         */
-        this._noDataFromSourceTimeout = null;
+        this._trackMutedTS = 0;
 
         this._onDeviceListWillChange = devices => {
             const oldRealDeviceId = this._realDeviceId;
@@ -207,69 +203,59 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * issues.
      */
     _initNoDataFromSourceHandlers() {
+        if (!this._isNoDataFromSourceEventsEnabled()) {
+            return;
+        }
+
+        this._setHandler('track_mute', () => {
+            this._trackMutedTS = window.performance.now();
+            this._fireNoDataFromSourceEvent();
+        });
+
+        this._setHandler('track_unmute', () => {
+            this._fireNoDataFromSourceEvent();
+            Statistics.sendAnalyticsAndLog(
+                TRACK_UNMUTED,
+                {
+                    'media_type': this.getType(),
+                    'track_type': 'local',
+                    value: window.performance.now() - this._trackMutedTS
+                });
+        });
+
         if (this.isVideoTrack() && this.videoType === VideoType.CAMERA) {
-            const _onNoDataFromSourceError
-                = this._onNoDataFromSourceError.bind(this);
-
-            this._setHandler('track_mute', () => {
-                if (this._checkForCameraIssues()) {
-                    const now = window.performance.now();
-
-                    this._noDataFromSourceTimeout
-                        = setTimeout(_onNoDataFromSourceError, 5000);
-                    this._setHandler('track_unmute', () => {
-                        this._clearNoDataFromSourceMuteResources();
-                        Statistics.sendAnalyticsAndLog(
-                            TRACK_UNMUTED,
-                            {
-                                'media_type': this.getType(),
-                                'track_type': 'local',
-                                value: window.performance.now() - now
-                            });
-                    });
+            this._setHandler('track_ended', () => {
+                if (!this.isReceivingData()) {
+                    this._fireNoDataFromSourceEvent();
                 }
             });
-            this._setHandler('track_ended', _onNoDataFromSourceError);
         }
     }
 
     /**
-     * Clears all timeouts and handlers set on MediaStreamTrack mute event.
-     * FIXME: Change the name of the method with better one.
+     * Returns true if no data from source events are enabled for this JitsiLocalTrack and false otherwise.
+     *
+     * @returns {boolean} - True if no data from source events are enabled for this JitsiLocalTrack and false otherwise.
      */
-    _clearNoDataFromSourceMuteResources() {
-        if (this._noDataFromSourceTimeout) {
-            clearTimeout(this._noDataFromSourceTimeout);
-            this._noDataFromSourceTimeout = null;
-        }
-        this._setHandler('track_unmute', undefined);
-    }
-
-    /**
-     * Called when potential camera issue is detected. Clears the handlers and
-     * timeouts set on MediaStreamTrack muted event. Verifies that the camera
-     * issue persists and fires NO_DATA_FROM_SOURCE event.
-     */
-    _onNoDataFromSourceError() {
-        this._clearNoDataFromSourceMuteResources();
-        if (this._checkForCameraIssues()) {
-            this._fireNoDataFromSourceEvent();
-        }
+    _isNoDataFromSourceEventsEnabled() {
+        // Disable the events for screen sharing.
+        return !this.isVideoTrack() || this.videoType !== VideoType.DESKTOP;
     }
 
     /**
      * Fires NO_DATA_FROM_SOURCE event and logs it to analytics and callstats.
      */
     _fireNoDataFromSourceEvent() {
-        this.emit(NO_DATA_FROM_SOURCE);
+        const value = !this.isReceivingData();
 
-        Statistics.sendAnalytics(createNoDataFromSourceEvent(this.getType()));
-        const log = { name: NO_DATA_FROM_SOURCE };
+        this.emit(NO_DATA_FROM_SOURCE, value);
 
-        if (this.isAudioTrack()) {
-            log.isReceivingData = this._isReceivingData();
-        }
-        Statistics.sendLog(JSON.stringify(log));
+        // FIXME: Should we report all of those events
+        Statistics.sendAnalytics(createNoDataFromSourceEvent(this.getType(), value));
+        Statistics.sendLog(JSON.stringify({
+            name: NO_DATA_FROM_SOURCE,
+            log: value
+        }));
     }
 
     /**
@@ -639,10 +625,9 @@ export default class JitsiLocalTrack extends JitsiTrack {
             setTimeout(() => {
                 if (!this._hasSentData) {
                     logger.warn(`${this} 'bytes sent' <= 0: \
-                        ${this._bytesSent}`);
+                        ${bytesSent}`);
 
-                    // we are not receiving anything from the microphone
-                    this._fireNoDataFromSourceEvent();
+                    Statistics.analytics.sendEvent(NO_BYTES_SENT, { 'media_type': this.getType() });
                 }
             }, 3000);
             this._testDataSent = false;
@@ -739,22 +724,6 @@ export default class JitsiLocalTrack extends JitsiTrack {
     }
 
     /**
-     * Detects camera issues, i.e. returns true if we expect this track to be
-     * receiving data from its source, but it isn't receiving data.
-     *
-     * @returns {boolean} true if an issue is detected and false otherwise
-     */
-    _checkForCameraIssues() {
-        if (!this.isVideoTrack()
-                || this._stopStreamInProgress
-                || this.videoType === VideoType.DESKTOP) {
-            return false;
-        }
-
-        return !this._isReceivingData();
-    }
-
-    /**
      * Checks whether the attached MediaStream is receiving data from source or
      * not. If the stream property is null(because of mute or another reason)
      * this method will return false.
@@ -765,7 +734,12 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * @returns {boolean} true if the stream is receiving data and false
      * this otherwise.
      */
-    _isReceivingData() {
+    isReceivingData() {
+        if (this.isVideoTrack()
+            && (this.isMuted() || this._stopStreamInProgress || this.videoType === VideoType.DESKTOP)) {
+            return true;
+        }
+
         if (!this.stream) {
             return false;
         }

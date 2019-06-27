@@ -6,8 +6,6 @@ import BridgeChannel from './BridgeChannel';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
 import JitsiLocalTrack from './JitsiLocalTrack';
-import JitsiTrackError from '../../JitsiTrackError';
-import * as JitsiTrackErrors from '../../JitsiTrackErrors';
 import Listenable from '../util/Listenable';
 import { safeCounterIncrement } from '../util/MathUtil';
 import * as MediaType from '../../service/RTC/MediaType';
@@ -263,18 +261,13 @@ export default class RTC extends Listenable {
             ? RTCUtils.newObtainAudioAndVideoPermissions(options)
             : RTCUtils.obtainAudioAndVideoPermissions(options);
 
-        return obtainMediaPromise.then(
-            tracksInfo => {
-                const tracks = usesNewGumFlow
-                    ? _newCreateLocalTracks(tracksInfo)
-                    : createLocalTracks(tracksInfo, options);
+        return obtainMediaPromise.then(tracksInfo => {
+            if (usesNewGumFlow) {
+                return _newCreateLocalTracks(tracksInfo);
+            }
 
-                return tracks.some(track => !track._isReceivingData())
-                    ? Promise.reject(
-                        new JitsiTrackError(
-                            JitsiTrackErrors.NO_DATA_FROM_SOURCE))
-                    : tracks;
-            });
+            return createLocalTracks(tracksInfo, options);
+        });
     }
 
     /**
@@ -494,6 +487,7 @@ export default class RTC extends Listenable {
      *      disabled by removing it from the SDP.
      * @param {boolean} options.preferH264 If set to 'true' H264 will be
      *      preferred over other video codecs.
+     * @param {boolean} options.startSilent If set to 'true' no audio will be sent or received.
      * @return {TraceablePeerConnection}
      */
     createPeerConnection(signaling, iceConfig, isP2P, options) {

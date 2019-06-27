@@ -207,6 +207,14 @@ export const ICE_ESTABLISHMENT_DURATION_DIFF
 export const ICE_STATE_CHANGED = 'ice.state.changed';
 
 /**
+ * Indicates that no bytes have been sent for the track.
+ *
+ * Properties:
+ *      mediaType: the media type of the local track ('audio' or 'video').
+ */
+export const NO_BYTES_SENT = 'track.no-bytes-sent';
+
+/**
  * Indicates that a track was unmuted (?).
  *
  * Properties:
@@ -344,9 +352,12 @@ export const createJingleEvent = function(action, attributes = {}) {
  * @param mediaType {String} the media type of the local track ('audio' or
  * 'video').
  */
-export const createNoDataFromSourceEvent = function(mediaType) {
+export const createNoDataFromSourceEvent = function(mediaType, value) {
     return {
-        attributes: { 'media_type': mediaType },
+        attributes: {
+            'media_type': mediaType,
+            value
+        },
         action: 'track.no.data.from.source',
         type: TYPE_OPERATIONAL
     };
@@ -439,6 +450,24 @@ export const createRttByRegionEvent = function(attributes) {
         type: TYPE_OPERATIONAL,
         action: 'rtt.by.region',
         attributes
+    };
+};
+
+/**
+ * Creates an event which contains an information related to the bridge channel close event.
+ *
+ * @param {string} code - A code from {@link https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent}
+ * @param {string} reason - A string which describes the reason for closing the bridge channel.
+ * @returns {{type: string, action: string, attributes: { code: string, reason: string }}}
+ */
+export const createBridgeChannelClosedEvent = function(code, reason) {
+    return {
+        type: TYPE_OPERATIONAL,
+        action: 'bridge-channel.error',
+        attributes: {
+            code,
+            reason
+        }
     };
 };
 
