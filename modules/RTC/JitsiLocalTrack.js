@@ -43,6 +43,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * JitsiRemoteTrack
      * @param trackInfo.mediaType the MediaType of the JitsiRemoteTrack
      * @param trackInfo.videoType the VideoType of the JitsiRemoteTrack
+     * @param trackInfo.effects the effects array contains the effect instance to use
      * @param trackInfo.resolution the video resolution if it's a video track
      * @param trackInfo.deviceId the ID of the local device for this track
      * @param trackInfo.facingMode the camera facing mode used in getUserMedia
@@ -60,7 +61,8 @@ export default class JitsiLocalTrack extends JitsiTrack {
         sourceType,
         stream,
         track,
-        videoType
+        videoType,
+        effects = []
     }) {
         super(
             /* conference */ null,
@@ -69,6 +71,13 @@ export default class JitsiLocalTrack extends JitsiTrack {
             /* streamInactiveHandler */ () => this.emit(LOCAL_TRACK_STOPPED),
             mediaType,
             videoType);
+
+        this._setEffectInProgress = false;
+        const effect = effects.find(e => e.isEnabled(this));
+
+        if (effect) {
+            this._startStreamEffect(effect);
+        }
 
         /**
          * The ID assigned by the RTC module on instance creation.
@@ -307,6 +316,106 @@ export default class JitsiLocalTrack extends JitsiTrack {
     }
 
     /**
+     * Starts the effect process and returns the modified stream.
+     *
+     * @private
+     * @param {*} effect - Represents effect instance
+     * @returns {void}
+     */
+    _startStreamEffect(effect) {
+        this._streamEffect = effect;
+        this._originalStream = this.stream;
+        this._setStream(this._streamEffect.startEffect(this._originalStream));
+    }
+
+    /**
+     * Stops the effect process and returns the original stream.
+     *
+     * @private
+     * @returns {void}
+     */
+    _stopStreamEffect() {
+        if (this._streamEffect) {
+            this._streamEffect.stopEffect();
+            this._setStream(this._originalStream);
+            this._originalStream = undefined;
+        }
+    }
+
+    /**
+     * Stops the currently used effect (if there is one) and starts the passed effect (if there is one).
+     *
+     * @param {Object|undefined} effect - The new effect to be set.
+     */
+    _switchStreamEffect(effect) {
+        if (this._streamEffect) {
+            this._stopStreamEffect();
+            this._streamEffect = undefined;
+        }
+        if (effect) {
+            this._startStreamEffect(effect);
+        }
+    }
+
+    /**
+     * Sets the effect and switches between the modified stream and original one.
+     *
+     * @param {Object} effect - Represents the effect instance to be used.
+     * @returns {Promise}
+     */
+    setEffect(effect) {
+        if (typeof this._streamEffect === 'undefined' && typeof effect === 'undefined') {
+            return Promise.resolve();
+        }
+
+        if (typeof effect !== 'undefined' && !effect.isEnabled(this)) {
+            return Promise.reject(new Error('Incompatible effect instance!'));
+        }
+
+        if (this._setEffectInProgress === true) {
+            return Promise.reject(new Error('setEffect already in progress!'));
+        }
+
+        if (this.isMuted()) {
+            this._streamEffect = effect;
+
+            return Promise.resolve();
+        }
+
+        const conference = this.conference;
+
+        if (!conference) {
+            this._switchStreamEffect(effect);
+
+            return Promise.resolve();
+        }
+
+        this._setEffectInProgress = true;
+
+        // TODO: Create new JingleSessionPC method for replacing a stream in JitsiLocalTrack without offer answer.
+        return conference.removeTrack(this)
+            .then(() => {
+                this._switchStreamEffect(effect);
+                if (this.isVideoTrack()) {
+                    this.containers.forEach(cont => RTCUtils.attachMediaStream(cont, this.stream));
+                }
+
+                return conference.addTrack(this);
+            })
+            .then(() => {
+                this._setEffectInProgress = false;
+            })
+            .catch(error => {
+                // Any error will be not recovarable and will trigger CONFERENCE_FAILED event. But let's try to cleanup
+                // everyhting related to the effect functionality.
+                this._setEffectInProgress = false;
+                this._switchStreamEffect();
+                logger.error('Failed to switch to the new stream!', error);
+                throw error;
+            });
+    }
+
+    /**
      * Asynchronously mutes this track.
      *
      * @returns {Promise}
@@ -375,6 +484,10 @@ export default class JitsiLocalTrack extends JitsiTrack {
                 logMuteInfo();
                 this._removeStreamFromConferenceAsMute(
                     () => {
+                        if (this._streamEffect) {
+                            this._stopStreamEffect();
+                        }
+
                         // FIXME: Maybe here we should set the SRC for the
                         // containers to something
                         // We don't want any events to be fired on this stream
@@ -392,6 +505,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
             const streamOptions = {
                 cameraDeviceId: this.getDeviceId(),
                 devices: [ MediaType.VIDEO ],
+                effects: this._streamEffect ? [ this._streamEffect ] : [],
                 facingMode: this.getCameraFacingMode()
             };
 
@@ -433,6 +547,10 @@ export default class JitsiLocalTrack extends JitsiTrack {
                     }
                 } else {
                     throw new JitsiTrackError(TRACK_NO_STREAM_FOUND);
+                }
+
+                if (this._streamEffect) {
+                    this._startStreamEffect(this._streamEffect);
                 }
 
                 this.containers.map(
@@ -522,6 +640,8 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * @returns {Promise}
      */
     dispose() {
+        this._switchStreamEffect();
+
         let promise = Promise.resolve();
 
         if (this.conference) {
@@ -679,7 +799,6 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * Stops the associated MediaStream.
      */
     stopStream() {
-
         /**
          * Indicates that we are executing {@link #stopStream} i.e.
          * {@link RTCUtils#stopMediaStream} for the <tt>MediaStream</tt>
@@ -751,7 +870,11 @@ export default class JitsiLocalTrack extends JitsiTrack {
         // we aren't receiving any data from the source. We want to notify
         // the users for error if the stream is muted or ended on it's
         // creation.
-        return this.stream.getTracks().some(track =>
+
+        // For video blur enabled use the original video stream
+        const stream = this._effectEnabled ? this._originalStream : this.stream;
+
+        return stream.getTracks().some(track =>
             (!('readyState' in track) || track.readyState === 'live')
                 && (!('muted' in track) || track.muted !== true));
     }
