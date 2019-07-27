@@ -276,6 +276,7 @@ export default class JitsiTrack extends EventEmitter {
      */
     attach(container) {
         if (this.stream) {
+            this._onTrackAttach(container);
             RTCUtils.attachMediaStream(container, this.stream);
         }
         this.containers.push(container);
@@ -296,6 +297,7 @@ export default class JitsiTrack extends EventEmitter {
             const c = cs[i];
 
             if (!container) {
+                this._onTrackDetach(c);
                 RTCUtils.attachMediaStream(c, null);
             }
             if (!container || c === container) {
@@ -304,8 +306,31 @@ export default class JitsiTrack extends EventEmitter {
         }
 
         if (container) {
+            this._onTrackDetach(container);
             RTCUtils.attachMediaStream(container, null);
         }
+    }
+
+    /**
+     * Called when the track has been attached to a new container.
+     *
+     * @param {HTMLElement} container the HTML container which can be 'video' or
+     * 'audio' element.
+     * @private
+     */
+    _onTrackAttach(container) { // eslint-disable-line no-unused-vars
+        // Should be defined by the classes that are extending JitsiTrack
+    }
+
+    /**
+     * Called when the track has been detached from a container.
+     *
+     * @param {HTMLElement} container the HTML container which can be 'video' or
+     * 'audio' element.
+     * @private
+     */
+    _onTrackDetach(container) { // eslint-disable-line no-unused-vars
+        // Should be defined by the classes that are extending JitsiTrack
     }
 
     /**
