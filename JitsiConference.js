@@ -28,6 +28,7 @@ import Jvb121EventGenerator from './modules/event/Jvb121EventGenerator';
 import RecordingManager from './modules/recording/RecordingManager';
 import RttMonitor from './modules/rttmonitor/rttmonitor';
 import AvgRTPStatsReporter from './modules/statistics/AvgRTPStatsReporter';
+import AudioOutputProblemDetector from './modules/statistics/AudioOutputProblemDetector';
 import SpeakerStatsCollector from './modules/statistics/SpeakerStatsCollector';
 import Statistics from './modules/statistics/statistics';
 import Transcriber from './modules/transcription/transcriber';
@@ -162,6 +163,12 @@ export default function JitsiConference(options) {
      */
     this.avgRtpStatsReporter
         = new AvgRTPStatsReporter(this, options.config.avgRtpStatsN || 15);
+
+    /**
+     * Detects issues with the audio of remote participants.
+     * @type {AudioOutputProblemDetector}
+     */
+    this._audioOutputProblemDetector = new AudioOutputProblemDetector(this);
 
     /**
      * Indicates whether the connection is interrupted or not.
@@ -455,6 +462,11 @@ JitsiConference.prototype.leave = function() {
         this.avgRtpStatsReporter = null;
     }
 
+    if (this._audioOutputProblemDetector) {
+        this._audioOutputProblemDetector.dispose();
+        this._audioOutputProblemDetector = null;
+    }
+
     if (this.rttMonitor) {
         this.rttMonitor.stop();
         this.rttMonitor = null;
@@ -682,13 +694,14 @@ JitsiConference.prototype.removeCommandListener = function(command) {
  * Sends text message to the other participants in the conference
  * @param message the text message.
  * @param elementName the element name to encapsulate the message.
- * @param nickname the name of the sender.
  * @deprecated Use 'sendMessage' instead. TODO: this should be private.
  */
 JitsiConference.prototype.sendTextMessage = function(
-        message, elementName = 'body', nickname = '') {
+        message, elementName = 'body') {
     if (this.room) {
-        this.room.sendMessage(message, elementName, nickname);
+        const displayName = (this.room.getFromPresence('nick') || {}).value;
+
+        this.room.sendMessage(message, elementName, displayName);
     }
 };
 
@@ -2253,11 +2266,12 @@ JitsiConference.prototype.getLocalParticipantProperty = function(name) {
  * @param overallFeedback an integer between 1 and 5 indicating the
  * user feedback
  * @param detailedFeedback detailed feedback from the user. Not yet used
+ * @returns {Promise} Resolves if feedback is submitted successfully.
  */
 JitsiConference.prototype.sendFeedback = function(
         overallFeedback,
         detailedFeedback) {
-    this.statistics.sendFeedback(overallFeedback, detailedFeedback);
+    return this.statistics.sendFeedback(overallFeedback, detailedFeedback);
 };
 
 /**
