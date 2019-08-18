@@ -213,6 +213,10 @@ export default class ChatRoom extends Listenable {
             if (this.password) {
                 pres.c('password').t(this.password).up();
             }
+            if (Settings.machineId) {
+                pres.c('machineId').t(Settings.machineId).up();
+            }
+
             pres.up();
         }
 
