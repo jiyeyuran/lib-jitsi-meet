@@ -4,16 +4,14 @@
     <meta charset="UTF-8">
     <title></title>
     <script src="libs/jquery-2.1.1.min.js"></script>
-    <script src="libs/strophe/strophe.js"></script>
-    <script src="libs/strophe/strophe.disco.min.js?v=1"></script>
     <script src="../../lib-jitsi-meet.min.js"></script>
     <script src="example.js" ></script>
 </head>
 <body>
-    <a href="#" onclick="unload()">Unload</a>
-    <a href="#" onclick="switchVideo()">switchVideo</a>
+    <a href="#" onclick="unload()">退出</a>
+    <a href="#" onclick="switchVideo()">切换视频</a>
     <div id="audioOutputSelectWrapper" style="display: none;">
-        Change audio output device
+        选择音频输出设备
         <select id="audioOutputSelect" onchange="changeAudioOutput(this)"></select>
     </div>
     <!-- <video id="localVideo" autoplay="true"></video> -->
