@@ -12,10 +12,10 @@ const options = {
 };
 
 const confOptions = {
-    name: '10047',
     openBridgeChannel: true
 };
 
+// 简会jwt
 const token = null;
 
 let connection = null;
@@ -121,7 +121,7 @@ function onUserLeft(id) {
    * That function is called when connection is established successfully
    */
 function onConnectionSuccess() {
-    room = connection.initJitsiConference('conference', confOptions);
+    room = connection.initJitsiConference('10047', confOptions);
     room.on(JitsiMeetJS.events.conference.TRACK_ADDED, onRemoteTrack);
     room.on(JitsiMeetJS.events.conference.TRACK_REMOVED, track => {
         console.log(`track removed!!!${track}`);
@@ -195,7 +195,17 @@ function switchVideo() {
         localTracks.pop();
     }
     JitsiMeetJS.createLocalTracks({
-        devices: [ isVideo ? 'video' : 'desktop' ]
+        devices: [ isVideo ? 'video' : 'desktop' ],
+        constraints: {
+            video: {
+                aspectRatio: 16 / 9,
+                height: {
+                    ideal: 360,
+                    max: 360,
+                    min: 240
+                }
+            }
+        }
     })
       .then(tracks => {
           localTracks.push(tracks[0]);
@@ -240,11 +250,23 @@ JitsiMeetJS.mediaDevices.addEventListener(JitsiMeetJS.events.mediaDevices.DEVICE
 
 connection.connect();
 
-JitsiMeetJS.createLocalTracks({ devices: [ 'audio', 'video' ] })
-    .then(onLocalTracks)
-    .catch(error => {
-        throw error;
-    });
+JitsiMeetJS.createLocalTracks({
+    devices: [ 'audio', 'video' ],
+    constraints: {
+        video: {
+            aspectRatio: 16 / 9,
+            height: {
+                ideal: 360,
+                max: 360,
+                min: 240
+            }
+        }
+    }
+})
+.then(onLocalTracks)
+.catch(error => {
+    throw error;
+});
 
 if (JitsiMeetJS.mediaDevices.isDeviceChangeAvailable('output')) {
     JitsiMeetJS.mediaDevices.enumerateDevices(devices => {
