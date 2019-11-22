@@ -6,7 +6,6 @@ import {
 } from '../../service/statistics/AnalyticsEvents';
 import { getLogger } from 'jitsi-meet-logger';
 import browser from '../browser';
-import Settings from '../settings/Settings';
 
 const MAX_CACHE_SIZE = 100;
 
@@ -104,7 +103,6 @@ class AnalyticsAdapter {
         this.conferenceName = '';
 
         this.addPermanentProperties({
-            'callstats_name': Settings.callStatsUserName,
             'user_agent': navigator.userAgent,
             'browser_name': browser.getName()
         });

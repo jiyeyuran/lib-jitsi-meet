@@ -26,6 +26,7 @@ import E2ePing from './modules/e2eping/e2eping';
 import Jvb121EventGenerator from './modules/event/Jvb121EventGenerator';
 import RecordingManager from './modules/recording/RecordingManager';
 import RttMonitor from './modules/rttmonitor/rttmonitor';
+import Settings from './modules/settings/Settings';
 import AvgRTPStatsReporter from './modules/statistics/AvgRTPStatsReporter';
 import AudioOutputProblemDetector from './modules/statistics/AudioOutputProblemDetector';
 import SpeakerStatsCollector from './modules/statistics/SpeakerStatsCollector';
@@ -284,10 +285,13 @@ JitsiConference.prototype._init = function(options = {}) {
     }
 
     const { config } = this.options;
+    const statsCurrentId = config.statisticsId ? config.statisticsId : Settings.callStatsUserName;
 
     this.room = this.xmpp.createRoom(
-        this.options.name,
-        config,
+        this.options.name, {
+            ...config,
+            statsId: statsCurrentId
+        },
         JitsiConference.resourceCreator
     );
 
@@ -344,23 +348,20 @@ JitsiConference.prototype._init = function(options = {}) {
     this.participantConnectionStatus.init();
 
     if (!this.statistics) {
-        let callStatsAliasName = this.myUserId();
-
-        if (config.enableDisplayNameInStats && config.displayName) {
-            callStatsAliasName = config.displayName;
-        }
-
         this.statistics = new Statistics(this.xmpp, {
-            callStatsAliasName,
+            aliasName: statsCurrentId,
+            userName: config.statisticsDisplayName ? config.statisticsDisplayName : this.myUserId(),
             callStatsConfIDNamespace: this.connection.options.hosts.domain,
             confID: config.confID || `${this.connection.options.hosts.domain}/${this.options.name}`,
             customScriptUrl: config.callStatsCustomScriptUrl,
             callStatsID: config.callStatsID,
             callStatsSecret: config.callStatsSecret,
             roomName: this.options.name,
-            swapUserNameAndAlias: config.enableStatsID,
             applicationName: config.applicationName,
             getWiFiStatsMethod: config.getWiFiStatsMethod
+        });
+        Statistics.analytics.addPermanentProperties({
+            'callstats_name': statsCurrentId
         });
     }
 
@@ -2533,12 +2534,10 @@ JitsiConference.prototype._acceptP2PIncomingCall = function(
 
     let remoteID = Strophe.getResourceFromJid(this.p2pJingleSession.remoteJid);
 
-    if (this.options.config.enableStatsID) {
-        const participant = this.participants[remoteID];
+    const participant = this.participants[remoteID];
 
-        if (participant) {
-            remoteID = participant.getStatsID() || remoteID;
-        }
+    if (participant) {
+        remoteID = participant.getStatsID() || remoteID;
     }
 
     this.statistics.startCallStats(
@@ -2883,12 +2882,10 @@ JitsiConference.prototype._startP2PSession = function(remoteJid) {
 
     let remoteID = Strophe.getResourceFromJid(this.p2pJingleSession.remoteJid);
 
-    if (this.options.config.enableStatsID) {
-        const participant = this.participants[remoteID];
+    const participant = this.participants[remoteID];
 
-        if (participant) {
-            remoteID = participant.getStatsID() || remoteID;
-        }
+    if (participant) {
+        remoteID = participant.getStatsID() || remoteID;
     }
 
     this.statistics.startCallStats(
