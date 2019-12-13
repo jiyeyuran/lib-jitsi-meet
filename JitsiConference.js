@@ -13,9 +13,12 @@ import JitsiTrackError from './JitsiTrackError';
 import * as JitsiTrackErrors from './JitsiTrackErrors';
 import * as JitsiTrackEvents from './JitsiTrackEvents';
 import authenticateAndUpgradeRole from './authenticateAndUpgradeRole';
-import P2PDominantSpeakerDetection from './modules/P2PDominantSpeakerDetection';
+import P2PDominantSpeakerDetection from './modules/detection/P2PDominantSpeakerDetection';
 import RTC from './modules/RTC/RTC';
-import TalkMutedDetection from './modules/TalkMutedDetection';
+import TalkMutedDetection from './modules/detection/TalkMutedDetection';
+import VADTalkMutedDetection from './modules/detection/VADTalkMutedDetection';
+import * as DetectionEvents from './modules/detection/DetectionEvents';
+import NoAudioSignalDetection from './modules/detection/NoAudioSignalDetection';
 import browser from './modules/browser';
 import ConnectionQuality from './modules/connectivity/ConnectionQuality';
 import IceFailedNotification
@@ -372,12 +375,32 @@ JitsiConference.prototype._init = function(options = {}) {
     this.eventManager.setupStatisticsListeners();
 
     if (config.enableTalkWhileMuted) {
-        // eslint-disable-next-line no-new
-        new TalkMutedDetection(
-            this,
-            () =>
+        // If VAD processor factory method is provided uses VAD based detection, otherwise fallback to audio level
+        // based detection.
+        if (config.createVADProcessor) {
+            logger.info('Using VAD detection for generating talk while muted events');
+            this._talkWhileMutedDetection = new VADTalkMutedDetection(this, config.createVADProcessor);
+            this._talkWhileMutedDetection.on(DetectionEvents.VAD_TALK_WHILE_MUTED, () =>
                 this.eventEmitter.emit(JitsiConferenceEvents.TALK_WHILE_MUTED));
+
+        } else {
+            logger.info('Using audio level based detection for generating talk while muted events');
+            this._talkWhileMutedDetection = new TalkMutedDetection(
+                this, () => this.eventEmitter.emit(JitsiConferenceEvents.TALK_WHILE_MUTED));
+        }
     }
+
+    // Generates events based on no audio input detector.
+    if (config.enableNoAudioDetection) {
+        this._noAudioSignalDetection = new NoAudioSignalDetection(this);
+        this._noAudioSignalDetection.on(DetectionEvents.NO_AUDIO_INPUT, () => {
+            this.eventEmitter.emit(JitsiConferenceEvents.NO_AUDIO_INPUT);
+        });
+        this._noAudioSignalDetection.on(DetectionEvents.AUDIO_INPUT_STATE_CHANGE, hasAudioSignal => {
+            this.eventEmitter.emit(JitsiConferenceEvents.AUDIO_INPUT_STATE_CHANGE, hasAudioSignal);
+        });
+    }
+
 
     if ('channelLastN' in config) {
         this.setLastN(config.channelLastN);
@@ -967,6 +990,32 @@ JitsiConference.prototype.replaceTrack = function(oldTrack, newTrack) {
 
             return Promise.resolve();
         }, error => Promise.reject(new Error(error)));
+};
+
+/**
+ * Replaces the track at the lower level by going through the Jingle session
+ * and WebRTC peer connection. The track is replaced without the need for an
+ * offer/answer cycle.
+ * @param {JitsiLocalTrack} localTrack - the local track whose media stream has
+ * been updated.
+ */
+JitsiConference.prototype.replaceTrackWithoutOfferAnswer = function(localTrack) {
+    const replaceTrackPromises = [];
+
+    if (this.jvbJingleSession) {
+        replaceTrackPromises.push(
+            this.jvbJingleSession.replaceTrackWithoutOfferAnswer(localTrack));
+    } else {
+        logger.info('replaceTrackWithoutOfferAnswer - no JVB JingleSession');
+    }
+    if (this.p2pJingleSession) {
+        replaceTrackPromises.push(
+            this.p2pJingleSession.replaceTrackWithoutOfferAnswer(localTrack));
+    } else {
+        logger.info('_doReplaceTrack - no P2P JingleSession');
+    }
+
+    return Promise.all(replaceTrackPromises);
 };
 
 /**
