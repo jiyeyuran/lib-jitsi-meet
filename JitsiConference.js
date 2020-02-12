@@ -805,9 +805,6 @@ JitsiConference.prototype.setDisplayName = function(name) {
 JitsiConference.prototype.setSubject = function(subject) {
     if (this.room && this.isModerator()) {
         this.room.setSubject(subject);
-    } else if (this.room && !this.isJoined()) {
-        // Not joined yet, cache the subject.
-        this.room.subject = subject;
     }
 };
 

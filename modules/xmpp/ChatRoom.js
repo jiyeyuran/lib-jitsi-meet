@@ -679,13 +679,6 @@ export default class ChatRoom extends Listenable {
                 member.status);
         }
 
-        if (this.subject) {
-            if (this.isModerator()) {
-                this.setSubject(this.subject);
-            }
-            this.subject = undefined;
-        }
-
         if (hasVersionUpdate) {
             logger.info(`Received version for ${jid}: ${member.version}`);
         }
