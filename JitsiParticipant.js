@@ -152,6 +152,13 @@ export default class JitsiParticipant {
     }
 
     /**
+     * @returns {String} The avatar id of this participant.
+     */
+    getAvatarID() {
+        return this._identity ? this._identity.user.id : '';
+    }
+
+    /**
      * @returns {String} The human-readable display name of this participant.
      */
     getDisplayName() {

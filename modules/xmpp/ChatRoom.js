@@ -453,6 +453,12 @@ export default class ChatRoom extends Listenable {
                 member.botType = type;
                 break;
             }
+            case 'avatar-id':
+                if (!member.identity) {
+                    member.identity = { user: {} };
+                }
+                member.identity.user.id = node.value;
+                break;
             case 'nick':
                 member.nick = node.value;
                 break;
