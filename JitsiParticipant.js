@@ -155,7 +155,14 @@ export default class JitsiParticipant {
      * @returns {String} The avatar id of this participant.
      */
     getAvatarID() {
-        return this._identity ? this._identity.user.id : '';
+        return this._identity ? this._identity.user.id : undefined;
+    }
+
+    /**
+     * @returns {String} The avatar url of this participant.
+     */
+    getAvatarURL() {
+        return this._identity ? this._identity.user.avatar : undefined;
     }
 
     /**

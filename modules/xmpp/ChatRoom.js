@@ -367,7 +367,7 @@ export default class ChatRoom extends Listenable {
      */
     onPresence(pres) {
         const from = pres.getAttribute('from');
-        const member = {};
+        const member = { identity: { user: {} } };
         const statusEl = pres.getElementsByTagName('status')[0];
 
         if (statusEl) {
@@ -454,10 +454,10 @@ export default class ChatRoom extends Listenable {
                 break;
             }
             case 'avatar-id':
-                if (!member.identity) {
-                    member.identity = { user: {} };
-                }
                 member.identity.user.id = node.value;
+                break;
+            case 'avatar-url':
+                member.identity.user.avatar = node.value;
                 break;
             case 'nick':
                 member.nick = node.value;
