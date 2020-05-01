@@ -191,10 +191,10 @@ export default class XMPP extends Listenable {
         this.eventEmitter.emit(XMPPEvents.CONNECTION_STATUS_CHANGED, credentials, status, msg);
         if (status === Strophe.Status.CONNECTED
             || status === Strophe.Status.ATTACHED) {
-            if (this.options.useStunTurn
-                || (this.options.p2p && this.options.p2p.useStunTurn)) {
-                this.connection.jingle.getStunAndTurnCredentials();
-            }
+            // if (this.options.useStunTurn
+            //     || (this.options.p2p && this.options.p2p.useStunTurn)) {
+            //     this.connection.jingle.getStunAndTurnCredentials();
+            // }
 
             logger.info(`My Jabber ID: ${this.connection.jid}`);
 
@@ -612,7 +612,11 @@ export default class XMPP extends Listenable {
         if (Array.isArray(p2pStunServers)) {
             logger.info('P2P STUN servers: ', p2pStunServers);
             iceConfig.p2p.iceServers = p2pStunServers;
-            iceConfig.jvb.iceServers = p2pStunServers;
+
+            if (this.options.useStunTurn) {
+                iceConfig.jvb.iceTransportPolicy = 'relay';
+                iceConfig.jvb.iceServers = p2pStunServers;
+            }
         }
 
         if (this.options.p2p && this.options.p2p.iceTransportPolicy) {
@@ -620,8 +624,6 @@ export default class XMPP extends Listenable {
                 this.options.p2p.iceTransportPolicy);
 
             iceConfig.p2p.iceTransportPolicy
-                = this.options.p2p.iceTransportPolicy;
-            iceConfig.jvb.iceTransportPolicy
                 = this.options.p2p.iceTransportPolicy;
         }
 
