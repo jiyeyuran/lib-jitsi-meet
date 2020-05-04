@@ -1,45 +1,61 @@
 /* global $ */
 
 import { getLogger } from 'jitsi-meet-logger';
-import { $msg, $pres, Strophe } from 'strophe.js';
+import { $msg, Strophe } from 'strophe.js';
 import 'strophejs-plugin-disco';
 
 import RandomUtil from '../util/RandomUtil';
 import * as JitsiConnectionErrors from '../../JitsiConnectionErrors';
 import * as JitsiConnectionEvents from '../../JitsiConnectionEvents';
 import browser from '../browser';
-import initEmuc from './strophe.emuc';
-import initJingle from './strophe.jingle';
+import MucConnectionPlugin from './strophe.emuc';
+import JingleConnectionPlugin from './strophe.jingle';
 import initStropheUtil from './strophe.util';
-import initPing from './strophe.ping';
-import initRayo from './strophe.rayo';
+import PingConnectionPlugin from './strophe.ping';
+import RayoConnectionPlugin from './strophe.rayo';
 import initStropheLogger from './strophe.logger';
-import LastSuccessTracker from './StropheBoshLastSuccess';
 import Listenable from '../util/Listenable';
 import Caps from './Caps';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import XMPPEvents from '../../service/xmpp/XMPPEvents';
+import XmppConnection from './XmppConnection';
 
 const logger = getLogger(__filename);
 
 /**
  * Creates XMPP connection.
- * @param {string} [token] - JWT token used for authentication(JWT authentication module must be enabled in Prosody).
- * @param {string} serviceUrl - The service URL for XMPP connection.
+ *
+ * @param {Object} options
+ * @param {string} [options.token] - JWT token used for authentication(JWT authentication module must be enabled in
+ * Prosody).
+ * @param {string} options.serviceUrl - The service URL for XMPP connection.
+ * @param {string} options.enableWebsocketResume - True to enable stream resumption.
+ * @param {number} [options.websocketKeepAlive] - See {@link XmppConnection} constructor.
+ * @returns {XmppConnection}
  */
-function createConnection(token, serviceUrl = '/http-bind') {
+function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', token, websocketKeepAlive }) {
     // Append token as URL param
     if (token) {
         // eslint-disable-next-line no-param-reassign
         serviceUrl += `${serviceUrl.indexOf('?') === -1 ? '?' : '&'}token=${token}`;
     }
 
-    const conn = new Strophe.Connection(serviceUrl);
+    return new XmppConnection({
+        enableWebsocketResume,
+        serviceUrl,
+        websocketKeepAlive
+    });
+}
 
-    // The default maxRetries is 5, which is too long.
-    conn.maxRetries = 3;
-
-    return conn;
+/**
+ * Initializes Strophe plugins that need to work with Strophe.Connection directly rather than the lib-jitsi-meet's
+ * {@link XmppConnection} wrapper.
+ *
+ * @returns {void}
+ */
+function initStropheNativePlugins() {
+    initStropheUtil();
+    initStropheLogger();
 }
 
 // FIXME: remove once we have a default config template. -saghul
@@ -70,8 +86,11 @@ export default class XMPP extends Listenable {
      * @param {String} options.serviceUrl - URL passed to the XMPP client which will be used to establish XMPP
      * connection with the server.
      * @param {String} options.bosh - Deprecated, use {@code serviceUrl}.
-     * @param {Array<Object>} options.p2pStunServers see
-     * {@link JingleConnectionPlugin} for more details.
+     * @param {boolean} options.enableWebsocketResume - Enables XEP-0198 stream management which will make the XMPP
+     * module try to resume the session in case the Websocket connection breaks.
+     * @param {number} [options.websocketKeepAlive] - The websocket keep alive interval. See {@link XmppConnection}
+     * constructor for more details.
+     * @param {Array<Object>} options.p2pStunServers see {@link JingleConnectionPlugin} for more details.
      * @param token
      */
     constructor(options, token) {
@@ -82,17 +101,19 @@ export default class XMPP extends Listenable {
         this.options = options;
         this.token = token;
         this.authenticatedUser = false;
-        this._initStrophePlugins(this);
 
-        // FIXME remove deprecated bosh option at some point
-        const serviceUrl = options.serviceUrl || options.bosh;
+        initStropheNativePlugins();
 
-        this.connection = createConnection(token, serviceUrl);
+        this.connection = createConnection({
+            enableWebsocketResume: options.enableWebsocketResume,
 
-        this._usesWebsocket = serviceUrl.startsWith('ws:') || serviceUrl.startsWith('wss:');
+            // FIXME remove deprecated bosh option at some point
+            serviceUrl: options.serviceUrl || options.bosh,
+            token,
+            websocketKeepAlive: options.websocketKeepAlive
+        });
 
-        this._lastSuccessTracker = new LastSuccessTracker();
-        this._lastSuccessTracker.startTracking(this.connection);
+        this._initStrophePlugins();
 
         this.caps = new Caps(this.connection, this.options.clientNode);
 
@@ -142,13 +163,17 @@ export default class XMPP extends Listenable {
         // this.caps.addFeature('urn:ietf:rfc:5576'); // a=ssrc
 
         // Enable Lipsync ?
-        if (browser.isChrome() && this.options.enableLipSync !== false) {
+        if (browser.isChrome() && this.options.enableLipSync === true) {
             logger.info('Lip-sync enabled !');
             this.caps.addFeature('http://jitsi.org/meet/lipsync');
         }
 
         if (this.connection.rayo) {
             this.caps.addFeature('urn:xmpp:rayo:client:1');
+        }
+
+        if (browser.supportsInsertableStreams()) {
+            this.caps.addFeature('https://jitsi.org/meet/e2ee');
         }
     }
 
@@ -198,9 +223,13 @@ export default class XMPP extends Listenable {
 
             logger.info(`My Jabber ID: ${this.connection.jid}`);
 
+            // XmppConnection emits CONNECTED again on reconnect - a good opportunity to clear any "last error" flags
+            this._resetState();
+
             // Schedule ping ?
             const pingJid = this.connection.domain;
 
+            // FIXME no need to do it again on stream resume
             this.caps.getFeaturesAndIdentities(pingJid)
                 .then(({ features, identities }) => {
                     if (features.has(Strophe.NS.PING)) {
@@ -259,13 +288,14 @@ export default class XMPP extends Listenable {
                     JitsiConnectionEvents.CONNECTION_FAILED,
                     JitsiConnectionErrors.OTHER_ERROR, msg);
             }
+        } else if (status === Strophe.Status.ERROR) {
+            this.lastErrorMsg = msg;
         } else if (status === Strophe.Status.DISCONNECTED) {
             // Stop ping interval
             this.connection.ping.stopInterval();
-            const wasIntentionalDisconnect = this.disconnectInProgress;
+            const wasIntentionalDisconnect = Boolean(this.disconnectInProgress);
             const errMsg = msg || this.lastErrorMsg;
 
-            this.disconnectInProgress = false;
             if (this.anonymousConnectionFailed) {
                 // prompt user for username and password
                 this.eventEmitter.emit(
@@ -352,9 +382,7 @@ export default class XMPP extends Listenable {
         //  Status.DISCONNECTING - The connection is currently being terminated
         //  Status.ATTACHED - The connection has been attached
 
-        this.anonymousConnectionFailed = false;
-        this.connectionFailed = false;
-        this.lastErrorMsg = undefined;
+        this._resetState();
         this.connection.connect(
             jid,
             password,
@@ -372,6 +400,7 @@ export default class XMPP extends Listenable {
      * @param options {object} connecting options - rid, sid, jid and password.
      */
     attach(options) {
+        this._resetState();
         const now = this.connectionTimes.attaching = window.performance.now();
 
         logger.log('(TIME) Strophe Attaching:\t', now);
@@ -381,6 +410,17 @@ export default class XMPP extends Listenable {
                 jid: options.jid,
                 password: options.password
             }));
+    }
+
+    /**
+     * Resets any state/flag before starting a new connection.
+     * @private
+     */
+    _resetState() {
+        this.anonymousConnectionFailed = false;
+        this.connectionFailed = false;
+        this.lastErrorMsg = undefined;
+        this.disconnectInProgress = undefined;
     }
 
     /**
@@ -508,15 +548,13 @@ export default class XMPP extends Listenable {
      * @returns {Promise} - Resolves when the disconnect process is finished or rejects with an error.
      */
     disconnect(ev) {
-        if (this.disconnectInProgress || !this.connection) {
-            this.eventEmitter.emit(JitsiConnectionEvents.WRONG_STATE);
-
-            return Promise.reject(new Error('Wrong connection state!'));
+        if (this.disconnectInProgress) {
+            return this.disconnectInProgress;
+        } else if (!this.connection) {
+            return Promise.resolve();
         }
 
-        this.disconnectInProgress = true;
-
-        return new Promise(resolve => {
+        this.disconnectInProgress = new Promise(resolve => {
             const disconnectListener = (credentials, status) => {
                 if (status === Strophe.Status.DISCONNECTED) {
                     resolve();
@@ -525,9 +563,11 @@ export default class XMPP extends Listenable {
             };
 
             this.eventEmitter.on(XMPPEvents.CONNECTION_STATUS_CHANGED, disconnectListener);
-
-            this._cleanupXmppConnection(ev);
         });
+
+        this._cleanupXmppConnection(ev);
+
+        return this.disconnectInProgress;
     }
 
     /**
@@ -548,9 +588,9 @@ export default class XMPP extends Listenable {
         // before disconnect() in order to attempt to have its unavailable presence at the top of the send queue. We
         // flush() once more after disconnect() in order to attempt to have its unavailable presence sent as soon as
         // possible.
-        !this._usesWebsocket && this.connection.flush();
+        !this.connection.isUsingWebSocket && this.connection.flush();
 
-        if (!this._usesWebsocket && ev !== null && typeof ev !== 'undefined') {
+        if (!this.connection.isUsingWebSocket && ev !== null && typeof ev !== 'undefined') {
             const evType = ev.type;
 
             if (evType === 'beforeunload' || evType === 'unload') {
@@ -560,30 +600,7 @@ export default class XMPP extends Listenable {
                 this.connection.options.sync = true;
 
                 // This is needed in some browsers where sync xhr sending is disabled by default on unload.
-                if (navigator.sendBeacon && !this.connection.disconnecting && this.connection.connected) {
-
-                    this.connection._changeConnectStatus(Strophe.Status.DISCONNECTING);
-                    this.connection.disconnecting = true;
-
-                    const body = this.connection._proto._buildBody()
-                        .attrs({
-                            type: 'terminate'
-                        });
-                    const pres = $pres({
-                        xmlns: Strophe.NS.CLIENT,
-                        type: 'unavailable'
-                    });
-
-                    body.cnode(pres.tree());
-
-                    const res = navigator.sendBeacon(
-                        `https:${this.connection.service}`,
-                        Strophe.serialize(body.tree()));
-
-                    logger.info(`Successfully send unavailable beacon ${res}`);
-
-                    this.connection._proto._abortAllRequests();
-                    this.connection._doDisconnect();
+                if (this.connection.sendUnavailableBeacon()) {
 
                     return;
                 }
@@ -627,12 +644,10 @@ export default class XMPP extends Listenable {
                 = this.options.p2p.iceTransportPolicy;
         }
 
-        initEmuc(this);
-        initJingle(this, this.eventEmitter, iceConfig);
-        initStropheUtil();
-        initPing(this);
-        initRayo();
-        initStropheLogger();
+        this.connection.addConnectionPlugin('emuc', new MucConnectionPlugin(this));
+        this.connection.addConnectionPlugin('jingle', new JingleConnectionPlugin(this, this.eventEmitter, iceConfig));
+        this.connection.addConnectionPlugin('ping', new PingConnectionPlugin(this));
+        this.connection.addConnectionPlugin('rayo', new RayoConnectionPlugin());
     }
 
     /**
@@ -647,11 +662,10 @@ export default class XMPP extends Listenable {
         // check for moving between shard if information is available
         if (this.options.deploymentInfo
             && this.options.deploymentInfo.shard
-            && this.connection._proto
-            && this.connection._proto.lastResponseHeaders) {
+            && this.connection.lastResponseHeaders) {
 
             // split headers by line
-            const headersArr = this.connection._proto.lastResponseHeaders
+            const headersArr = this.connection.lastResponseHeaders
                 .trim().split(/[\r\n]+/);
             const headers = {};
 
@@ -673,7 +687,7 @@ export default class XMPP extends Listenable {
         /* eslint-disable camelcase */
         // check for possible suspend
         details.suspend_time = this.connection.ping.getPingSuspendTime();
-        details.time_since_last_success = this._lastSuccessTracker.getTimeSinceLastSuccess();
+        details.time_since_last_success = this.connection.getTimeSinceLastSuccess();
         /* eslint-enable camelcase */
 
         return details;

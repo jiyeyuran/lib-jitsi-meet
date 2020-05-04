@@ -6,6 +6,7 @@ import { getLogger } from 'jitsi-meet-logger';
 import * as JitsiConferenceEvents from './JitsiConferenceEvents';
 import { ParticipantConnectionStatus }
     from './modules/connectivity/ParticipantConnectionStatus';
+import { ERROR_FEATURE_VERSION_MISMATCH } from './modules/xmpp/Caps';
 import * as MediaType from './service/RTC/MediaType';
 
 const logger = getLogger(__filename);
@@ -254,17 +255,31 @@ export default class JitsiParticipant {
      * @returns {Promise<Set<String>, Error>}
      */
     getFeatures(timeout = 5000) {
-        return this._conference.xmpp.caps.getFeatures(this._jid, timeout)
+        if (this._getFeaturesPromise) {
+            return this._getFeaturesPromise;
+        }
+
+        this._getFeaturesPromise = this._conference.xmpp.caps.getFeatures(this._jid, timeout)
             .catch(error => {
-                // when we detect version mismatch we return a string as error
-                // we want to retry in such case
-                if (error && error.constructor === String) {
+                // Retry on feature version mismatch
+                if (error === ERROR_FEATURE_VERSION_MISMATCH) {
                     return this._conference.xmpp.caps.getFeatures(this._jid, timeout);
                 }
 
                 logger.warn(`Failed to discover features of ${this._jid}`, error);
 
                 return Promise.reject(error);
+            });
+
+        return this._getFeaturesPromise
+            .then(result => {
+                this._getFeaturesPromise = undefined;
+
+                return result;
+            }, error => {
+                this._getFeaturesPromise = undefined;
+
+                throw error;
             });
     }
 

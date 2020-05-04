@@ -7,11 +7,10 @@ import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import * as JitsiTranscriptionStatus from '../../JitsiTranscriptionStatus';
 import Listenable from '../util/Listenable';
 import * as MediaType from '../../service/RTC/MediaType';
-import { createConferenceEvent } from '../../service/statistics/AnalyticsEvents';
 import XMPPEvents from '../../service/xmpp/XMPPEvents';
-import Statistics from '../statistics/statistics';
 
 import Moderator from './moderator';
+import XmppConnection from './XmppConnection';
 
 const logger = getLogger(__filename);
 
@@ -90,7 +89,7 @@ export default class ChatRoom extends Listenable {
 
     /**
      *
-     * @param connection
+     * @param {XmppConnection} connection - The XMPP connection instance.
      * @param jid
      * @param password
      * @param XMPP
@@ -110,6 +109,7 @@ export default class ChatRoom extends Listenable {
         this.members = {};
         this.presMap = {};
         this.presHandlers = {};
+        this._removeConnListeners = [];
         this.joined = false;
         this.role = null;
         this.focusMucJid = null;
@@ -184,6 +184,11 @@ export default class ChatRoom extends Listenable {
 
             preJoin.then(() => {
                 this.sendPresence(true);
+                this._removeConnListeners.push(
+                    this.connection.addEventListener(
+                        XmppConnection.Events.CONN_STATUS_CHANGED,
+                        this.onConnStatusChanged.bind(this))
+                );
                 resolve();
             });
         });
@@ -196,7 +201,7 @@ export default class ChatRoom extends Listenable {
     sendPresence(fromJoin) {
         const to = this.presMap.to;
 
-        if (!to || (!this.joined && !fromJoin)) {
+        if (!this.connection || !this.connection.connected || !to || (!this.joined && !fromJoin)) {
             // Too early to send presence - not initialized
             return;
         }
@@ -251,7 +256,8 @@ export default class ChatRoom extends Listenable {
         // top of the send queue. We flush() once more after sending/queuing the
         // unavailable presence in order to attempt to have it sent as soon as
         // possible.
-        this.connection.flush();
+        // FIXME do not use Strophe.Connection in the ChatRoom directly
+        !this.connection.isUsingWebSocket && this.connection.flush();
         this.connection.send(pres);
         this.connection.flush();
     }
@@ -306,10 +312,7 @@ export default class ChatRoom extends Listenable {
                 logger.warn(`Meeting Id changed from:${this.meetingId} to:${meetingId}`);
             }
             this.meetingId = meetingId;
-
-            // The name of the action is a little bit confusing but it seems this is the preferred name by the consumers
-            // of the analytics events.
-            Statistics.sendAnalytics(createConferenceEvent('joined', { meetingId }));
+            this.eventEmitter.emit(XMPPEvents.MEETING_ID_SET, meetingId);
         }
     }
 
@@ -359,6 +362,18 @@ export default class ChatRoom extends Listenable {
             GlobalOnErrorHandler.callErrorHandler(error);
             logger.error('Error getting room configuration form: ', error);
         });
+    }
+
+    /**
+     * Handles Xmpp Connection status updates.
+     *
+     * @param {Strophe.Status} status - The Strophe connection status.
+     */
+    onConnStatusChanged(status) {
+        // Send cached presence when the XMPP connection is re-established.
+        if (status === XmppConnection.Status.CONNECTED) {
+            this.sendPresence();
+        }
     }
 
     /**
@@ -1111,6 +1126,13 @@ export default class ChatRoom extends Listenable {
                         .t(key)
                         .up()
                         .up();
+                    formsubmit
+                        .c('field',
+                             { 'var': 'muc#roomconfig_passwordprotectedroom' })
+                        .c('value')
+                        .t(key === null || key.length === 0 ? '0' : '1')
+                        .up()
+                        .up();
 
                     // Fixes a bug in prosody 0.9.+
                     // https://prosody.im/issues/issue/373
@@ -1121,7 +1143,6 @@ export default class ChatRoom extends Listenable {
                         .up()
                         .up();
 
-                    // FIXME: is muc#roomconfig_passwordprotectedroom required?
                     this.connection.sendIQ(formsubmit, onSuccess, onError);
                 } else {
                     onNotSupported();
@@ -1281,9 +1302,9 @@ export default class ChatRoom extends Listenable {
      */
     sendAudioInfoPresence(mute, callback) {
         this.addAudioInfoToPresence(mute);
-        if (this.connection) {
-            this.sendPresence();
-        }
+
+        // FIXME resend presence on CONNECTED
+        this.sendPresence();
         if (callback) {
             callback();
         }
@@ -1309,9 +1330,6 @@ export default class ChatRoom extends Listenable {
      */
     sendVideoInfoPresence(mute) {
         this.addVideoInfoToPresence(mute);
-        if (!this.connection) {
-            return;
-        }
         this.sendPresence();
     }
 
@@ -1469,6 +1487,9 @@ export default class ChatRoom extends Listenable {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => onMucLeft(true), 5000);
             const eventEmitter = this.eventEmitter;
+
+            this._removeConnListeners.forEach(remove => remove());
+            this._removeConnListeners = [];
 
             /**
              *

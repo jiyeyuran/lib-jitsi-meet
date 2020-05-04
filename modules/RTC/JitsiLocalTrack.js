@@ -96,6 +96,14 @@ export default class JitsiLocalTrack extends JitsiTrack {
             // Cache the constraints of the track in case of any this track
             // model needs to call getUserMedia again, such as when unmuting.
             this._constraints = track.getConstraints();
+
+            // Safari returns an empty constraints object, construct the constraints using getSettings.
+            if (!Object.keys(this._constraints).length && videoType === VideoType.CAMERA) {
+                this._constraints = {
+                    height: track.getSettings().height,
+                    width: track.getSettings().width
+                };
+            }
         } else {
             // FIXME Currently, Firefox is ignoring our constraints about
             // resolutions so we do not store it, to avoid wrong reporting of
@@ -375,7 +383,9 @@ export default class JitsiLocalTrack extends JitsiTrack {
             return Promise.reject(new Error('setEffect already in progress!'));
         }
 
-        if (this.isMuted()) {
+        // In case we have an audio track that is being enhanced with an effect, we still want it to be applied,
+        // even if the track is muted. Where as for video the actual track doesn't exists if it's muted.
+        if (this.isMuted() && !this.isAudioTrack()) {
             this._streamEffect = effect;
 
             return Promise.resolve();
@@ -391,11 +401,13 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
         this._setEffectInProgress = true;
 
-        // For firefox/safari, replace the stream without doing a offer answer with the remote peer.
-        if (browser.supportsRtpSender()) {
+        if (browser.usesUnifiedPlan()) {
             this._switchStreamEffect(effect);
+            if (this.isVideoTrack()) {
+                this.containers.forEach(cont => RTCUtils.attachMediaStream(cont, this.stream));
+            }
 
-            return conference.replaceTrackWithoutOfferAnswer(this)
+            return conference.replaceTrack(this, this)
                 .then(() => {
                     this._setEffectInProgress = false;
                 })
@@ -539,7 +551,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
                     = RTCUtils.obtainAudioAndVideoPermissions(streamOptions);
             }
 
-            promise.then(streamsInfo => {
+            promise = promise.then(streamsInfo => {
                 // The track kind for presenter track is video as well.
                 const mediaType = this.getType() === MediaType.PRESENTER ? MediaType.VIDEO : this.getType();
                 const streamInfo
