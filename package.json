@@ -52,7 +52,7 @@
     "string-replace-loader": "2.1.1",
     "webpack": "4.26.1",
     "webpack-bundle-analyzer": "3.4.1",
-    "webpack-cli": "3.1.2"
+    "webpack-cli": "3.3.12"
   },
   "scripts": {
     "watch": "webpack --progress --colors --watch",
